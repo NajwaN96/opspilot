@@ -1,0 +1,218 @@
+package httpapi
+
+import (
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/opspilot/opspilot/apps/api/internal/repository"
+	"github.com/opspilot/opspilot/apps/api/internal/service"
+)
+
+type Server struct {
+	svc     *service.Service
+	logger  *slog.Logger
+	version string
+}
+
+func New(svc *service.Service, logger *slog.Logger, version string) *Server {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Server{svc: svc, logger: logger, version: version}
+}
+
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("GET /api/v1/clusters", s.listClusters)
+	mux.HandleFunc("GET /api/v1/services", s.listServices)
+	mux.HandleFunc("GET /api/v1/services/{id}", s.getService)
+	mux.HandleFunc("GET /api/v1/incidents", s.listIncidents)
+	mux.HandleFunc("GET /api/v1/incidents/{id}", s.getIncident)
+	mux.HandleFunc("POST /api/v1/incidents/{id}/remediations", s.startRemediation)
+	mux.HandleFunc("GET /api/v1/experiments", s.listExperiments)
+	mux.HandleFunc("POST /api/v1/experiments", s.startExperiment)
+	mux.HandleFunc("GET /{$}", s.root)
+	return s.logged(mux)
+}
+
+func (s *Server) root(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"service": "opspilot-api",
+		"health":  "/health",
+		"api":     "/api/v1",
+	})
+}
+
+func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"service": "opspilot-api",
+		"version": s.version,
+	})
+}
+
+func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
+	items, err := s.svc.ListClusters(r.Context())
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) listServices(w http.ResponseWriter, r *http.Request) {
+	items, err := s.svc.ListServices(r.Context())
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) getService(w http.ResponseWriter, r *http.Request) {
+	item, err := s.svc.GetService(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) listIncidents(w http.ResponseWriter, r *http.Request) {
+	items, err := s.svc.ListIncidents(r.Context())
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) getIncident(w http.ResponseWriter, r *http.Request) {
+	item, err := s.svc.GetIncident(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) startRemediation(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Action string `json:"action"`
+	}
+	if err := decode(w, r, &body); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid", "request body must be JSON")
+		return
+	}
+	item, err := s.svc.StartRemediation(r.Context(), r.PathValue("id"), body.Action)
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, item)
+}
+
+func (s *Server) listExperiments(w http.ResponseWriter, r *http.Request) {
+	item, err := s.svc.ListExperiments(r.Context())
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) startExperiment(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ServiceID   string `json:"serviceId"`
+		Scenario    string `json:"scenario"`
+		DurationSec int    `json:"durationSec"`
+	}
+	if err := decode(w, r, &body); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid", "request body must be JSON")
+		return
+	}
+	item, err := s.svc.StartExperiment(r.Context(), body.ServiceID, body.Scenario, body.DurationSec)
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, item)
+}
+
+func (s *Server) writeErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		writeAPIError(w, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, repository.ErrConflict):
+		writeAPIError(w, http.StatusConflict, "conflict", err.Error())
+	case errors.Is(err, repository.ErrInvalid):
+		writeAPIError(w, http.StatusBadRequest, "invalid", err.Error())
+	default:
+		s.logger.Error("request failed", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal", "internal error")
+	}
+}
+
+func decode(w http.ResponseWriter, r *http.Request, dest any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	return dec.Decode(dest)
+}
+
+type apiError struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+func writeAPIError(w http.ResponseWriter, status int, code, message string) {
+	var body apiError
+	body.Error.Code = code
+	body.Error.Message = message
+	writeJSON(w, status, body)
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		slog.Error("encode response", "error", err)
+	}
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (s *Server) logged(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w}
+		next.ServeHTTP(sw, r)
+		s.logger.Info("request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", sw.status,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
+	})
+}

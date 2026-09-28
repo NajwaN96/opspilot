@@ -1,0 +1,16 @@
+import type { NextConfig } from "next";
+
+const apiOrigin = process.env.API_PROXY_URL ?? "http://127.0.0.1:8094";
+
+const nextConfig: NextConfig = {
+  // The console is opened at 127.0.0.1. Next blocks dev assets for that host unless it is listed.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  async rewrites() {
+    return [
+      { source: "/api/:path*", destination: `${apiOrigin}/api/:path*` },
+      { source: "/health", destination: `${apiOrigin}/health` },
+    ];
+  },
+};
+
+export default nextConfig;

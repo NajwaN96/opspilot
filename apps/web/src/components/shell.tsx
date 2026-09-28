@@ -1,0 +1,139 @@
+"use client";
+
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import {
+  Activity,
+  Boxes,
+  FlaskConical,
+  Gauge,
+  LayoutDashboard,
+  Menu,
+  Rocket,
+  Server,
+  Settings,
+  Siren,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/status-badge";
+import { useApi } from "@/lib/use-api";
+import type { Cluster, Incident } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+const items = [
+  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/services", label: "Services", icon: Boxes },
+  { href: "/incidents", label: "Incidents", icon: Siren },
+  { href: "/deployments", label: "Deployments", icon: Rocket },
+  { href: "/slos", label: "SLOs", icon: Gauge },
+  { href: "/infrastructure", label: "Infrastructure", icon: Server },
+  { href: "/reliability-lab", label: "Reliability Lab", icon: FlaskConical },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
+
+function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavLinks({ pathname, activeIncidents, onNavigate }: { pathname: string; activeIncidents: number; onNavigate?: () => void }) {
+  return (
+    <nav aria-label="Primary" className="flex-1">
+      <ul className="space-y-0.5">
+        {items.map((item) => {
+          const active = isActive(pathname, item.href);
+          const Icon = item.icon;
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center gap-2 border-l-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
+                  active && "border-l-primary bg-muted text-foreground",
+                  !active && "border-l-transparent",
+                )}
+              >
+                <Icon className="size-4 shrink-0" aria-hidden />
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/incidents" && activeIncidents > 0 ? (
+                  <span className="font-mono text-[11px] text-red-300">{activeIncidents}</span>
+                ) : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const [menuPath, setMenuPath] = useState<string | null>(null);
+  const open = menuPath === pathname;
+  const clusters = useApi<Cluster[]>("/api/v1/clusters", 5000);
+  const incidents = useApi<Incident[]>("/api/v1/incidents", 5000);
+  const cluster = clusters.data?.[0];
+  const activeIncidents = incidents.data?.filter((incident) => incident.status !== "resolved").length ?? 0;
+
+  return (
+    <div className="flex h-dvh min-h-0 bg-background">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
+        <div className="border-b border-border px-3 py-3">
+          <div className="text-sm font-semibold tracking-tight">OpsPilot</div>
+          <div className="text-[11px] text-muted-foreground">Reliability control plane</div>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col py-2">
+          <NavLinks pathname={pathname} activeIncidents={activeIncidents} />
+        </div>
+        <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+          Local simulation. No cluster credentials.
+        </div>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
+          <Button className="md:hidden" variant="ghost" size="icon" onClick={() => setMenuPath(pathname)} aria-label="Open navigation">
+            <Menu />
+          </Button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate font-mono text-sm">{cluster?.name ?? "production-01"}</span>
+              {cluster ? <StatusBadge value={cluster.status} /> : null}
+            </div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {cluster ? `${cluster.environment} · ${cluster.region} · ${cluster.kubernetesVersion}` : "Connecting to control plane"}
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Activity className="size-3.5" aria-hidden />
+            <span className="font-mono uppercase">Simulated</span>
+          </div>
+        </header>
+        <main className="min-h-0 flex-1 overflow-auto">
+          <div className="mx-auto w-full max-w-[1440px] p-3 md:p-4">{children}</div>
+        </main>
+      </div>
+      {open ? (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button className="absolute inset-0 bg-black/60" aria-label="Close navigation" onClick={() => setMenuPath(null)} />
+          <div className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-sidebar">
+            <div className="flex items-center justify-between border-b border-border px-3 py-3">
+              <div className="text-sm font-semibold">OpsPilot</div>
+              <Button variant="ghost" size="icon" onClick={() => setMenuPath(null)} aria-label="Close menu">
+                <X />
+              </Button>
+            </div>
+            <div className="py-2">
+              <NavLinks pathname={pathname} activeIncidents={activeIncidents} onNavigate={() => setMenuPath(null)} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}

@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    ports:
+      - "8094:8094"
+    environment:
+      OPSPILOT_ADDR: ":8094"
+      OPSPILOT_CORS_ORIGINS: "http://127.0.0.1:3461,http://localhost:3461"
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+    ports:
+      - "3461:3461"
+    environment:
+      API_PROXY_URL: "http://api:8094"
+      PORT: "3461"
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      - api
