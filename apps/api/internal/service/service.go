@@ -12,12 +12,19 @@ import (
 // Service is the control-plane use-case layer.
 // Policy runs here, before any executor is allowed to act.
 type Service struct {
-	repo repository.Catalog
-	exec executor.Executor
+	repo           repository.Catalog
+	exec           executor.Executor
+	allowDemoReset bool
 }
 
 func New(repo repository.Catalog, exec executor.Executor) *Service {
 	return &Service{repo: repo, exec: exec}
+}
+
+// SetDemoResetEnabled arms the development-only INC-142 reset.
+// Production processes leave this false.
+func (s *Service) SetDemoResetEnabled(enabled bool) {
+	s.allowDemoReset = enabled
 }
 
 func (s *Service) ListClusters(ctx context.Context) ([]model.Cluster, error) {
@@ -106,4 +113,12 @@ func (s *Service) StartExperiment(ctx context.Context, serviceID, scenario strin
 		return model.Experiment{}, fmt.Errorf("%w: duration must be between 15 and 300 seconds", repository.ErrInvalid)
 	}
 	return s.repo.StartExperiment(ctx, serviceID, scenario, durationSec)
+}
+
+// ResetDemo restores only the seeded INC-142 simulation.
+func (s *Service) ResetDemo(ctx context.Context) error {
+	if !s.allowDemoReset {
+		return fmt.Errorf("%w: demo reset is disabled outside local development", repository.ErrForbidden)
+	}
+	return s.repo.ResetDemo(ctx)
 }

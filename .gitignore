@@ -16,6 +16,8 @@ coverage.out
 .env
 .env.*
 !.env.example
+infra/kubeconfig
+*.kubeconfig
 
 # Logs and OS
 *.log

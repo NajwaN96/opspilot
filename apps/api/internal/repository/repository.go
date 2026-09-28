@@ -8,9 +8,10 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
-	ErrConflict = errors.New("conflict")
-	ErrInvalid  = errors.New("invalid")
+	ErrNotFound  = errors.New("not found")
+	ErrConflict  = errors.New("conflict")
+	ErrInvalid   = errors.New("invalid")
+	ErrForbidden = errors.New("forbidden")
 )
 
 // Catalog is the read/write boundary for operational state.
@@ -25,4 +26,5 @@ type Catalog interface {
 	StartRemediation(ctx context.Context, incidentID string) (model.Remediation, error)
 	ListExperiments(ctx context.Context) (model.ExperimentCatalog, error)
 	StartExperiment(ctx context.Context, serviceID, scenario string, durationSec int) (model.Experiment, error)
+	ResetDemo(ctx context.Context) error
 }

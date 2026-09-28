@@ -9,14 +9,16 @@ import { ErrorBlock, LoadingBlock, Panel } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { apiPost } from "@/lib/api";
-import { completedSteps, formatDuration, formatLatency, formatPercent } from "@/lib/format";
+import { completedSteps, formatClock, formatDuration, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import { useTween } from "@/lib/use-tween";
-import type { Incident, Remediation } from "@/lib/types";
+import type { Incident, ReadyStatus, Remediation } from "@/lib/types";
 
 export function Investigation({ id }: { id: string }) {
   const incidentQuery = useApi<Incident>(`/api/v1/incidents/${id}`, 1000);
+  const ready = useApi<ReadyStatus>("/ready", 15000);
   const [pending, setPending] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   if (incidentQuery.loading && !incidentQuery.data) return <LoadingBlock label="Loading incident" />;
@@ -41,6 +43,19 @@ export function Investigation({ id }: { id: string }) {
     }
   }
 
+  async function resetDemo() {
+    setResetting(true);
+    setActionError(null);
+    try {
+      await apiPost<{ status: string }>("/api/v1/demo/reset", {});
+      await incidentQuery.reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Reset failed");
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -48,6 +63,7 @@ export function Investigation({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-mono text-lg font-semibold">{incident.id}</h1>
             <StatusBadge value={incident.severity} />
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Source: Simulation</span>
             <StatusBadge value={incident.status} />
           </div>
           <p className="mt-1 text-base font-medium">{incident.title}</p>
@@ -176,8 +192,39 @@ export function Investigation({ id }: { id: string }) {
                 ) : null}
               </div>
             ) : null}
+            {ready.data?.demoResetEnabled && incident.id === "INC-142" ? (
+              <Button className="mt-3 w-full" variant="outline" onClick={() => void resetDemo()} disabled={resetting}>
+                {resetting ? "Resetting demo…" : "Reset Demo"}
+              </Button>
+            ) : null}
+            {ready.data?.demoResetEnabled && incident.id === "INC-142" ? (
+              <p className="mt-2 text-[11px] text-muted-foreground">Development only. Restores INC-142. Does not delete cluster or Kubernetes data.</p>
+            ) : null}
           </Panel>
         </div>
+      </div>
+      <div className="mt-3">
+        <Panel title="Audit trail" action={<span className="text-[11px] text-muted-foreground">Source: PostgreSQL</span>} padded={false}>
+          {!incident.audit || incident.audit.length === 0 ? (
+            <p className="px-3 py-4 text-sm text-muted-foreground">No remediation actions recorded yet.</p>
+          ) : (
+            <ul>
+              {incident.audit.map((record) => (
+                <li key={record.id} className="border-b border-border px-3 py-3 last:border-b-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">{formatClock(record.at)}</span>
+                    <span className="font-medium">{record.action}</span>
+                    <span className="text-xs text-muted-foreground">{record.actor}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{record.detail}</p>
+                  <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                    policy {record.policyResult || "—"} · approval {record.approvalResult || "—"} · execution {record.executionStatus || "—"} · verification {record.verificationResult || "—"}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
       </div>
     </div>
   );

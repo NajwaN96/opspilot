@@ -85,6 +85,13 @@ type Service struct {
 	Deployments     []Deployment  `json:"deployments,omitempty"`
 	Metrics         []MetricPoint `json:"metrics,omitempty"`
 	OpenIncidents   []string      `json:"openIncidents,omitempty"`
+	// Source is "simulation" or "kubernetes". Telemetry is "simulated" or "none".
+	Source       string     `json:"source"`
+	Telemetry    string     `json:"telemetry"`
+	Image        string     `json:"image,omitempty"`
+	WorkloadKind string     `json:"workloadKind,omitempty"`
+	Restarts     int        `json:"restarts,omitempty"`
+	LastObserved *time.Time `json:"lastObserved,omitempty"`
 }
 
 type SLO struct {
@@ -149,6 +156,22 @@ type Incident struct {
 	Recommendation *Recommendation `json:"recommendation,omitempty"`
 	Remediation    *Remediation    `json:"remediation,omitempty"`
 	Snapshot       Snapshot        `json:"snapshot"`
+	Audit          []AuditRecord   `json:"audit,omitempty"`
+}
+
+// AuditRecord is an append-only remediation action. It is not a Kubernetes event.
+type AuditRecord struct {
+	ID                 int64     `json:"id"`
+	At                 time.Time `json:"at"`
+	Actor              string    `json:"actor"`
+	IncidentID         string    `json:"incidentId"`
+	ProposalID         string    `json:"proposalId,omitempty"`
+	Action             string    `json:"action"`
+	PolicyResult       string    `json:"policyResult"`
+	ApprovalResult     string    `json:"approvalResult"`
+	ExecutionStatus    string    `json:"executionStatus"`
+	VerificationResult string    `json:"verificationResult"`
+	Detail             string    `json:"detail"`
 }
 
 type Snapshot struct {
@@ -269,4 +292,61 @@ type ExperimentCatalog struct {
 	Notice    string       `json:"notice"`
 	Scenarios []Scenario   `json:"scenarios"`
 	Runs      []Experiment `json:"runs"`
+}
+
+// KubernetesStatus is the control plane's view of a real cluster.
+// It is never used for the simulated production-01 incident plane.
+type KubernetesStatus struct {
+	Cluster           string     `json:"cluster"`
+	Mode              string     `json:"mode"`
+	Namespace         string     `json:"namespace"`
+	Namespaces        []string   `json:"namespaces"`
+	Connectivity      string     `json:"connectivity"`
+	KubernetesVersion string     `json:"kubernetesVersion,omitempty"`
+	LastSync          *time.Time `json:"lastSync,omitempty"`
+	Message           string     `json:"message,omitempty"`
+	Source            string     `json:"source"`
+	NodeCount         int        `json:"nodeCount"`
+	NodesReady        int        `json:"nodesReady"`
+}
+
+type Workload struct {
+	Name         string            `json:"name"`
+	Namespace    string            `json:"namespace"`
+	Kind         string            `json:"kind"`
+	Version      string            `json:"version"`
+	Image        string            `json:"image"`
+	Desired      int               `json:"desired"`
+	Ready        int               `json:"ready"`
+	Restarts     int               `json:"restarts"`
+	Status       string            `json:"status"`
+	LastObserved time.Time         `json:"lastObserved"`
+	ServiceID    string            `json:"serviceId"`
+	Source       string            `json:"source"`
+	Labels       map[string]string `json:"labels,omitempty"`
+	Pods         []Pod             `json:"pods,omitempty"`
+}
+
+type Pod struct {
+	Name      string     `json:"name"`
+	Namespace string     `json:"namespace"`
+	Service   string     `json:"service"`
+	Status    string     `json:"status"`
+	Ready     string     `json:"ready"`
+	Restarts  int        `json:"restarts"`
+	Node      string     `json:"node"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+	Source    string     `json:"source"`
+}
+
+type ClusterEvent struct {
+	ID        string    `json:"id"`
+	At        time.Time `json:"at"`
+	Namespace string    `json:"namespace"`
+	Type      string    `json:"type"`
+	Reason    string    `json:"reason"`
+	Object    string    `json:"object"`
+	Message   string    `json:"message"`
+	Count     int       `json:"count"`
+	Source    string    `json:"source"`
 }

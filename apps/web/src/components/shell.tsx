@@ -20,7 +20,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { useApi } from "@/lib/use-api";
-import type { Cluster, Incident } from "@/lib/types";
+import { formatAgo } from "@/lib/format";
+import type { Cluster, Incident, KubernetesStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -78,7 +79,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const open = menuPath === pathname;
   const clusters = useApi<Cluster[]>("/api/v1/clusters", 5000);
   const incidents = useApi<Incident[]>("/api/v1/incidents", 5000);
-  const cluster = clusters.data?.[0];
+  const kubernetes = useApi<KubernetesStatus>("/api/v1/kubernetes/status", 5000);
+  const cluster = clusters.data?.find((item) => item.simulated) ?? clusters.data?.[0];
+  const live = kubernetes.data;
   const activeIncidents = incidents.data?.filter((incident) => incident.status !== "resolved").length ?? 0;
 
   return (
@@ -92,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLinks pathname={pathname} activeIncidents={activeIncidents} />
         </div>
         <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-          Local simulation. No cluster credentials.
+          Local development. Kubernetes access is read-only.
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -101,17 +104,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Menu />
           </Button>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-mono text-sm">{cluster?.name ?? "production-01"}</span>
-              {cluster ? <StatusBadge value={cluster.status} /> : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">Local</span>
+              <span className="truncate font-mono text-sm">{live?.cluster ?? "opspilot-dev"}</span>
+              <StatusBadge value={live?.connectivity ?? "disconnected"} />
+              <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">{live?.namespace ?? "demo-shop"}</span>
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
-              {cluster ? `${cluster.environment} · ${cluster.region} · ${cluster.kubernetesVersion}` : "Connecting to control plane"}
+              {live?.lastSync ? `Last sync ${formatAgo(live.lastSync)}` : live?.message ?? "Kubernetes status pending"}
+              {cluster ? ` · Simulated incident plane ${cluster.name}` : ""}
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="ml-auto hidden items-center gap-2 text-[11px] text-muted-foreground md:flex">
             <Activity className="size-3.5" aria-hidden />
-            <span className="font-mono uppercase">Simulated</span>
+            <span className="font-mono uppercase">{live?.mode === "local-kubernetes" ? "Local Kubernetes" : "Unavailable"}</span>
           </div>
         </header>
         <main className="min-h-0 flex-1 overflow-auto">

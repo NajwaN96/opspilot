@@ -1,103 +1,196 @@
 "use client";
 
+import Link from "next/link";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorBlock, LoadingBlock, PageHeader, Panel } from "@/components/states";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatAgo } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { Cluster } from "@/lib/types";
+import type { ClusterEvent, KubernetesStatus, Namespace, Workload, WorkloadPod } from "@/lib/types";
 
 export function InfrastructurePage() {
-  const clusters = useApi<Cluster[]>("/api/v1/clusters", 5000);
-  if (clusters.loading && !clusters.data) return <LoadingBlock />;
-  const cluster = clusters.data?.[0];
-  if (!cluster) return <ErrorBlock message={clusters.error ?? "Cluster inventory unavailable"} onRetry={() => void clusters.reload()} />;
+  const status = useApi<KubernetesStatus>("/api/v1/kubernetes/status", 5000);
+  const namespaces = useApi<Namespace[]>("/api/v1/kubernetes/namespaces", 5000);
+  const workloads = useApi<Workload[]>("/api/v1/kubernetes/workloads", 5000);
+  const pods = useApi<WorkloadPod[]>("/api/v1/kubernetes/pods", 5000);
+  const events = useApi<ClusterEvent[]>("/api/v1/kubernetes/events", 5000);
+
+  if (status.loading && !status.data) return <LoadingBlock label="Reading cluster" />;
+  if (!status.data) return <ErrorBlock message={status.error ?? "Cluster status unavailable"} onRetry={() => void status.reload()} />;
+
+  const live = status.data;
+  const disconnected = live.connectivity === "disconnected";
 
   return (
     <div>
       <PageHeader
-        kicker={cluster.provider}
+        kicker="Source: Kubernetes"
         title="Infrastructure"
-        description={`${cluster.name} is a simulated ${cluster.kubernetesVersion} cluster in ${cluster.region}. Node metrics are not collected from kubelet.`}
+        description="Read-only view of the local cluster. Simulated production-01 nodes are not shown here."
       />
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Control plane" padded={false}>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">Component</TableHead>
-                <TableHead className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cluster.controlPlane.map((component) => (
-                <TableRow key={component.name}>
-                  <TableCell className="font-mono text-xs">{component.name}</TableCell>
-                  <TableCell>
-                    <StatusBadge value={component.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Panel>
-        <Panel title="Namespaces" padded={false}>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {["Namespace", "Services", "Status"].map((heading) => (
-                  <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {heading}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cluster.namespaces.map((namespace) => (
-                <TableRow key={namespace.name}>
-                  <TableCell className="font-mono">{namespace.name}</TableCell>
-                  <TableCell className="font-mono">{namespace.services}</TableCell>
-                  <TableCell>
-                    <StatusBadge value={namespace.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Panel>
+      <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Fact label="Cluster" value={live.cluster} />
+        <Fact label="Mode" value={live.mode === "local-kubernetes" ? "Local Kubernetes" : "Unavailable"} />
+        <div className="border border-border bg-card px-3 py-2">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Connectivity</div>
+          <div className="mt-1">
+            <StatusBadge value={live.connectivity} />
+          </div>
+        </div>
+        <Fact label="Nodes ready" value={`${live.nodesReady}/${live.nodeCount}`} />
       </div>
-      <div className="mt-3">
-        <Panel title="Nodes" padded={false}>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {["Node", "Status", "Role", "Zone", "CPU", "Memory", "Pods", "Kubelet"].map((heading) => (
-                  <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {heading}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cluster.nodes.map((node) => (
-                <TableRow key={node.name}>
-                  <TableCell className="font-mono">{node.name}</TableCell>
-                  <TableCell>
-                    <StatusBadge value={node.status === "Ready" ? "ready" : node.status} />
-                  </TableCell>
-                  <TableCell>{node.role}</TableCell>
-                  <TableCell>{node.zone}</TableCell>
-                  <TableCell className="font-mono">{node.cpuPercent}%</TableCell>
-                  <TableCell className="font-mono">{node.memoryPercent}%</TableCell>
-                  <TableCell className="font-mono">
-                    {node.pods}/{node.podCapacity}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{node.kubeletVersion}</TableCell>
+      {disconnected ? (
+        <div className="border border-border bg-card px-3 py-4 text-sm text-muted-foreground">
+          {live.message || "The local cluster is disconnected."} Namespace, workload, pod, and event tables stay empty until a real API response arrives.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <Panel title="Namespaces" padded={false}>
+            <SimpleTable
+              headings={["Namespace", "Deployments", "Status"]}
+              rows={(namespaces.data ?? []).map((namespace) => [
+                namespace.name,
+                String(namespace.services),
+                namespace.status,
+              ])}
+              empty="No namespaces in the discovery scope."
+            />
+          </Panel>
+          <Panel title="Workloads" action={<span className="text-[11px] text-muted-foreground">{live.namespace}</span>} padded={false}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {["Workload", "Namespace", "Version", "Desired", "Ready", "Restarts", "Status", "Last observed"].map((heading) => (
+                    <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {heading}
+                    </TableHead>
+                  ))}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Panel>
-      </div>
+              </TableHeader>
+              <TableBody>
+                {(workloads.data ?? []).map((workload) => (
+                  <TableRow key={`${workload.namespace}/${workload.name}`}>
+                    <TableCell>
+                      <Link href={`/services/${workload.serviceId}`} className="font-medium hover:underline">
+                        {workload.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{workload.namespace}</TableCell>
+                    <TableCell className="font-mono text-xs">{workload.version || "—"}</TableCell>
+                    <TableCell className="font-mono">{workload.desired}</TableCell>
+                    <TableCell className="font-mono">{workload.ready}</TableCell>
+                    <TableCell className="font-mono">{workload.restarts}</TableCell>
+                    <TableCell>
+                      <StatusBadge value={workload.status} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatAgo(workload.lastObserved)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Panel>
+          <Panel title="Pods" padded={false}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {["Pod", "Service", "Status", "Ready", "Restarts", "Node", "Age"].map((heading) => (
+                    <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {heading}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(pods.data ?? []).map((pod) => (
+                  <TableRow key={`${pod.namespace}/${pod.name}`}>
+                    <TableCell className="font-mono text-xs">{pod.name}</TableCell>
+                    <TableCell>{pod.service || "—"}</TableCell>
+                    <TableCell>
+                      <StatusBadge value={pod.status.toLowerCase() === "running" ? "healthy" : pod.status.toLowerCase()} />
+                    </TableCell>
+                    <TableCell className="font-mono">{pod.ready}</TableCell>
+                    <TableCell className="font-mono">{pod.restarts}</TableCell>
+                    <TableCell className="font-mono text-xs">{pod.node || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{pod.startedAt ? formatAgo(pod.startedAt) : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Panel>
+          <Panel title="Recent Kubernetes events" padded={false}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {["When", "Type", "Reason", "Object", "Message"].map((heading) => (
+                    <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {heading}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(events.data ?? []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                      No events in the discovery namespace.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (events.data ?? []).map((event) => (
+                    <TableRow key={event.id}>
+                      <TableCell className="text-xs text-muted-foreground">{formatAgo(event.at)}</TableCell>
+                      <TableCell>
+                        <StatusBadge value={event.type.toLowerCase() === "warning" ? "warning" : "normal"} />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{event.reason}</TableCell>
+                      <TableCell className="font-mono text-xs">{event.object}</TableCell>
+                      <TableCell className="max-w-md truncate text-xs">{event.message}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Panel>
+        </div>
+      )}
+      {events.error ? <p className="mt-2 text-xs text-red-300">{events.error}</p> : null}
     </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-border bg-card px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-sm">{value}</div>
+    </div>
+  );
+}
+
+function SimpleTable({ headings, rows, empty }: { headings: string[]; rows: string[][]; empty: string }) {
+  if (rows.length === 0) return <p className="px-3 py-4 text-sm text-muted-foreground">{empty}</p>;
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          {headings.map((heading) => (
+            <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
+              {heading}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={row.join("/")}>
+            {row.map((cell, index) => (
+              <TableCell key={`${row[0]}-${headings[index]}`} className={index === 0 ? "font-mono" : ""}>
+                {index === headings.length - 1 ? <StatusBadge value={cell} /> : cell}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

@@ -8,10 +8,17 @@ import (
 )
 
 type Config struct {
-	Addr        string
-	CORSOrigins []string
-	Step        time.Duration
-	Version     string
+	Addr           string
+	CORSOrigins    []string
+	Step           time.Duration
+	Version        string
+	DatabaseURL    string
+	Env            string
+	Kubeconfig     string
+	ClusterName    string
+	Namespaces     []string
+	SyncInterval   time.Duration
+	AllowDemoReset bool
 }
 
 func Load() Config {
@@ -29,11 +36,36 @@ func Load() Config {
 	if addr == "" {
 		addr = ":8094"
 	}
+	env := os.Getenv("OPSPILOT_ENV")
+	if env == "" {
+		env = "development"
+	}
+	cluster := os.Getenv("OPSPILOT_K8S_CLUSTER")
+	if cluster == "" {
+		cluster = "opspilot-dev"
+	}
+	namespaces := []string{"demo-shop"}
+	if raw := os.Getenv("OPSPILOT_K8S_NAMESPACES"); raw != "" {
+		namespaces = split(raw)
+	}
+	syncEvery := 15 * time.Second
+	if raw := os.Getenv("OPSPILOT_SYNC_INTERVAL"); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			syncEvery = parsed
+		}
+	}
 	return Config{
-		Addr:        addr,
-		CORSOrigins: origins,
-		Step:        time.Duration(stepMS) * time.Millisecond,
-		Version:     "0.1.0",
+		Addr:           addr,
+		CORSOrigins:    origins,
+		Step:           time.Duration(stepMS) * time.Millisecond,
+		Version:        "0.2.0",
+		DatabaseURL:    os.Getenv("OPSPILOT_DATABASE_URL"),
+		Env:            env,
+		Kubeconfig:     os.Getenv("OPSPILOT_KUBECONFIG"),
+		ClusterName:    cluster,
+		Namespaces:     namespaces,
+		SyncInterval:   syncEvery,
+		AllowDemoReset: env != "production",
 	}
 }
 

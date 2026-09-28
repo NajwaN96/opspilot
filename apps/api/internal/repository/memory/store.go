@@ -153,6 +153,33 @@ func (s *Store) StartExperiment(_ context.Context, serviceID, scenario string, d
 	return s.experimentView(run, now), nil
 }
 
+// RestoreRemediation rehydrates an approval that was stored outside the process.
+func (s *Store) RestoreRemediation(started time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.remediation = &remediationRun{started: started}
+}
+
+// ClearRemediation drops the in-process rollback. Callers that persist history
+// must delete that history themselves. This does not touch other incidents.
+func (s *Store) ClearRemediation() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.remediation = nil
+}
+
+// Epoch is the story clock anchor chosen when the store was created.
+func (s *Store) Epoch() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.epoch
+}
+
+func (s *Store) ResetDemo(context.Context) error {
+	s.ClearRemediation()
+	return nil
+}
+
 func (s *Store) clock(at time.Time) string {
 	mins := storyNowMinute + int(math.Round(at.Sub(s.epoch).Minutes()))
 	mins = ((mins % (24 * 60)) + (24 * 60)) % (24 * 60)
@@ -696,6 +723,8 @@ func (spec serviceSpec) materialize(s *Store, now time.Time, pay payState) model
 		ErrorRate:       errorRate,
 		LastDeployment:  last,
 		Replicas:        model.Replicas{Desired: spec.replicas, Ready: spec.replicas},
+		Source:          "simulation",
+		Telemetry:       "simulated",
 		SLO: model.SLO{
 			Objective:            spec.objective,
 			Window:               "30d",

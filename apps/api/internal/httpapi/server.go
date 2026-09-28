@@ -1,12 +1,15 @@
 package httpapi
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/opspilot/opspilot/apps/api/internal/kubernetes"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 	"github.com/opspilot/opspilot/apps/api/internal/service"
 )
@@ -15,6 +18,10 @@ type Server struct {
 	svc     *service.Service
 	logger  *slog.Logger
 	version string
+	// Kubernetes is read-only. A nil reader is reported as disconnected.
+	Kubernetes kubernetes.Reader
+	// Ready reports dependencies. Nil means the process has no external dependencies.
+	Ready func(r *http.Request) map[string]any
 }
 
 func New(svc *service.Service, logger *slog.Logger, version string) *Server {
@@ -27,6 +34,7 @@ func New(svc *service.Service, logger *slog.Logger, version string) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("GET /ready", s.ready)
 	mux.HandleFunc("GET /api/v1/clusters", s.listClusters)
 	mux.HandleFunc("GET /api/v1/services", s.listServices)
 	mux.HandleFunc("GET /api/v1/services/{id}", s.getService)
@@ -35,6 +43,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/incidents/{id}/remediations", s.startRemediation)
 	mux.HandleFunc("GET /api/v1/experiments", s.listExperiments)
 	mux.HandleFunc("POST /api/v1/experiments", s.startExperiment)
+	mux.HandleFunc("GET /api/v1/kubernetes/status", s.kubernetesStatus)
+	mux.HandleFunc("GET /api/v1/kubernetes/namespaces", s.kubernetesNamespaces)
+	mux.HandleFunc("GET /api/v1/kubernetes/workloads", s.kubernetesWorkloads)
+	mux.HandleFunc("GET /api/v1/kubernetes/workloads/{namespace}/{name}", s.kubernetesWorkload)
+	mux.HandleFunc("GET /api/v1/kubernetes/pods", s.kubernetesPods)
+	mux.HandleFunc("GET /api/v1/kubernetes/events", s.kubernetesEvents)
+	mux.HandleFunc("POST /api/v1/demo/reset", s.resetDemo)
 	mux.HandleFunc("GET /{$}", s.root)
 	return s.logged(mux)
 }
@@ -53,6 +68,26 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 		"service": "opspilot-api",
 		"version": s.version,
 	})
+}
+
+func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
+	body := map[string]any{
+		"status":           "ok",
+		"database":         "memory",
+		"kubernetes":       "disconnected",
+		"demoResetEnabled": false,
+	}
+	if s.Ready != nil {
+		for key, value := range s.Ready(r) {
+			body[key] = value
+		}
+	}
+	status := http.StatusOK
+	if body["database"] == "down" {
+		body["status"] = "unavailable"
+		status = http.StatusServiceUnavailable
+	}
+	writeJSON(w, status, body)
 }
 
 func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
@@ -151,6 +186,8 @@ func (s *Server) writeErr(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusConflict, "conflict", err.Error())
 	case errors.Is(err, repository.ErrInvalid):
 		writeAPIError(w, http.StatusBadRequest, "invalid", err.Error())
+	case errors.Is(err, repository.ErrForbidden):
+		writeAPIError(w, http.StatusForbidden, "forbidden", err.Error())
 	default:
 		s.logger.Error("request failed", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal", "internal error")
@@ -206,13 +243,27 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 func (s *Server) logged(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = newRequestID()
+		}
+		w.Header().Set("X-Request-ID", requestID)
 		sw := &statusWriter{ResponseWriter: w}
-		next.ServeHTTP(sw, r)
+		next.ServeHTTP(sw, r.WithContext(r.Context()))
 		s.logger.Info("request",
+			"request_id", requestID,
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 	})
+}
+
+func newRequestID() string {
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return "unknown"
+	}
+	return hex.EncodeToString(buf[:])
 }

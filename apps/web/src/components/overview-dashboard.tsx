@@ -4,17 +4,20 @@ import Link from "next/link";
 import { ErrorBlock, LoadingBlock, PageHeader, Panel } from "@/components/states";
 import { ServiceTable } from "@/components/service-table";
 import { StatusBadge } from "@/components/status-badge";
-import { formatDuration, formatPercent } from "@/lib/format";
+import { formatAgo, formatDuration, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { Cluster, Incident, Service } from "@/lib/types";
+import type { Cluster, Incident, KubernetesStatus, Service, Workload } from "@/lib/types";
 
 export function OverviewDashboard() {
   const clusters = useApi<Cluster[]>("/api/v1/clusters", 4000);
   const services = useApi<Service[]>("/api/v1/services", 4000);
   const incidents = useApi<Incident[]>("/api/v1/incidents", 4000);
+  const kubernetes = useApi<KubernetesStatus>("/api/v1/kubernetes/status", 4000);
+  const workloads = useApi<Workload[]>("/api/v1/kubernetes/workloads", 4000);
   const loading = (clusters.loading || services.loading || incidents.loading) && !clusters.data && !services.data;
   const error = clusters.error ?? services.error ?? incidents.error;
-  const cluster = clusters.data?.[0];
+  const cluster = clusters.data?.find((item) => item.simulated) ?? clusters.data?.[0];
+  const simulatedServices = services.data?.filter((service) => service.source !== "kubernetes") ?? [];
   const active = incidents.data?.filter((incident) => incident.status !== "resolved") ?? [];
 
   if (loading) return <LoadingBlock />;
@@ -28,7 +31,7 @@ export function OverviewDashboard() {
       <PageHeader
         kicker={cluster.name}
         title="Overview"
-        description="Live view of the simulated production cluster. Signals come from the in-memory control plane, not from a Kubernetes API."
+        description="The incident plane is simulated. Kubernetes workloads below are read from the local cluster and are not mixed into those reliability numbers."
       />
       {active.length > 0 ? (
         <div className="mb-3 border border-red-400/40 bg-red-400/10">
@@ -51,6 +54,7 @@ export function OverviewDashboard() {
           No active incidents. {cluster.name} is clear.
         </div>
       )}
+      <EnvironmentStrip status={kubernetes.data} />
       <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Stat label="Cluster health" value={health.state} hint={cluster.kubernetesVersion} emphasize={health.state} />
         <Stat label="Active incidents" value={String(health.activeIncidents)} hint={health.activeIncidents === 1 ? "SEV-2 open" : "Open right now"} />
@@ -63,8 +67,8 @@ export function OverviewDashboard() {
         <Stat label="Deployments today" value={String(health.deploymentsToday)} hint="Last 24 hours" />
       </div>
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.8fr)]">
-        <Panel title="Service health" padded={false}>
-          <ServiceTable services={services.data} />
+        <Panel title="Simulated service health" action={<span className="text-[11px] text-muted-foreground">Source: Simulation</span>} padded={false}>
+          <ServiceTable services={simulatedServices} />
         </Panel>
         <Panel title="Active incidents" padded={false}>
           {active.length === 0 ? (
@@ -92,6 +96,87 @@ export function OverviewDashboard() {
           )}
         </Panel>
       </div>
+      <div className="mt-3">
+        <Panel
+          title="Kubernetes workloads"
+          action={<span className="text-[11px] text-muted-foreground">Source: Kubernetes · {kubernetes.data?.namespace ?? "demo-shop"}</span>}
+          padded={false}
+        >
+          <WorkloadTable workloads={workloads.data} connectivity={kubernetes.data?.connectivity} message={workloads.error ?? kubernetes.data?.message} />
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function EnvironmentStrip({ status }: { status?: KubernetesStatus | null }) {
+  return (
+    <div className="mb-3 grid gap-2 border border-border bg-card px-3 py-2 text-sm sm:grid-cols-4">
+      <Field label="Environment" value="LOCAL" />
+      <Field label="Cluster" value={status?.cluster ?? "opspilot-dev"} />
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Kubernetes</div>
+        <div className="mt-1">
+          <StatusBadge value={status?.connectivity ?? "disconnected"} />
+        </div>
+      </div>
+      <Field label="Namespace" value={status?.namespace ?? "demo-shop"} />
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-sm">{value}</div>
+    </div>
+  );
+}
+
+function WorkloadTable({ workloads, connectivity, message }: { workloads?: Workload[] | null; connectivity?: string; message?: string }) {
+  if (connectivity === "disconnected") {
+    return <p className="px-3 py-4 text-sm text-muted-foreground">{message || "Local cluster is disconnected. No workloads are invented for this view."}</p>;
+  }
+  if (!workloads) {
+    return <p className="px-3 py-4 text-sm text-muted-foreground">Waiting for the Kubernetes read.</p>;
+  }
+  if (workloads.length === 0) {
+    return <p className="px-3 py-4 text-sm text-muted-foreground">No Deployments in the discovery namespace.</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+            {["Workload", "Namespace", "Version", "Desired", "Ready", "Restarts", "Status", "Last observed"].map((heading) => (
+              <th key={heading} className="px-3 py-2 font-medium">
+                {heading}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {workloads.map((workload) => (
+            <tr key={`${workload.namespace}/${workload.name}`} className="border-b border-border last:border-b-0">
+              <td className="px-3 py-2">
+                <Link href={`/services/${workload.serviceId}`} className="font-medium hover:underline">
+                  {workload.name}
+                </Link>
+              </td>
+              <td className="px-3 py-2 font-mono text-xs">{workload.namespace}</td>
+              <td className="px-3 py-2 font-mono text-xs">{workload.version || "—"}</td>
+              <td className="px-3 py-2 font-mono tabular-nums">{workload.desired}</td>
+              <td className="px-3 py-2 font-mono tabular-nums">{workload.ready}</td>
+              <td className="px-3 py-2 font-mono tabular-nums">{workload.restarts}</td>
+              <td className="px-3 py-2">
+                <StatusBadge value={workload.status} />
+              </td>
+              <td className="px-3 py-2 text-xs text-muted-foreground">{formatAgo(workload.lastObserved)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -19,20 +19,36 @@ export function ServiceDetail({ id }: { id: string }) {
 
   const svc = service.data;
   const related = incidents.data?.filter((incident) => incident.serviceId === svc.id) ?? [];
+  const fromKubernetes = svc.source === "kubernetes";
 
   return (
     <div>
       <PageHeader
-        kicker={`${svc.namespace} / ${svc.clusterId}`}
+        kicker={`${fromKubernetes ? "Source: Kubernetes" : "Source: Simulation"} · ${svc.namespace} / ${svc.clusterId}`}
         title={svc.name}
         description={svc.description}
         actions={<StatusBadge value={svc.status} />}
       />
       <dl className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Fact label="Owner" value={svc.owner} />
-        <Fact label="Runtime" value={svc.runtime} />
-        <Fact label="Version" value={`${svc.version} ← ${svc.previousVersion}`} mono />
-        <Fact label="Replicas" value={`${svc.replicas.ready}/${svc.replicas.desired}`} mono />
+        {fromKubernetes ? (
+          <>
+            <Fact label="Namespace" value={svc.namespace} mono />
+            <Fact label="Deployment" value={svc.name} mono />
+            <Fact label="Image" value={svc.image || "—"} mono />
+            <Fact label="Version" value={svc.version || "—"} mono />
+            <Fact label="Desired replicas" value={String(svc.replicas.desired)} mono />
+            <Fact label="Ready replicas" value={String(svc.replicas.ready)} mono />
+            <Fact label="Restarts" value={String(svc.restarts ?? 0)} mono />
+            <Fact label="Last observed" value={svc.lastObserved ? formatAgo(svc.lastObserved) : "—"} />
+          </>
+        ) : (
+          <>
+            <Fact label="Owner" value={svc.owner} />
+            <Fact label="Runtime" value={svc.runtime} />
+            <Fact label="Version" value={`${svc.version} ← ${svc.previousVersion}`} mono />
+            <Fact label="Replicas" value={`${svc.replicas.ready}/${svc.replicas.desired}`} mono />
+          </>
+        )}
       </dl>
       <Tabs defaultValue="overview">
         <TabsList variant="line">
@@ -43,12 +59,25 @@ export function ServiceDetail({ id }: { id: string }) {
           <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-3">
+          {fromKubernetes ? (
+            <Panel title="Kubernetes status">
+              <p className="text-sm text-muted-foreground">
+                This record was discovered from a Deployment. Availability, latency, and error rate are not collected, so they are omitted here.
+              </p>
+              <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+                <Fact label="Workload" value={svc.workloadKind || "Deployment"} />
+                <Fact label="Kubernetes status" value={svc.status} />
+                <Fact label="Source" value="Kubernetes" />
+              </dl>
+            </Panel>
+          ) : (
           <div className="grid gap-3 md:grid-cols-4">
             <Fact label="Availability" value={formatPercent(svc.availability)} mono />
             <Fact label="P95 latency" value={formatLatency(svc.p95LatencyMs)} mono />
             <Fact label="Error rate" value={formatPercent(svc.errorRate)} mono />
             <Fact label="Last deployment" value={formatAgo(svc.lastDeployment)} />
           </div>
+          )}
           <div className="mt-3">
             <Panel title="Open incidents" padded={false}>
               {svc.openIncidents && svc.openIncidents.length > 0 ? (
@@ -68,6 +97,11 @@ export function ServiceDetail({ id }: { id: string }) {
           </div>
         </TabsContent>
         <TabsContent value="reliability" className="mt-3">
+          {fromKubernetes ? (
+            <Panel title="Reliability telemetry">
+              <p className="text-sm text-muted-foreground">Source: none. Prometheus and OpenTelemetry are not connected. This page does not invent an SLO for a discovered workload.</p>
+            </Panel>
+          ) : (
           <Panel title={`SLO · ${svc.slo.window} objective ${formatPercent(svc.slo.objective)}`}>
             <div className="mb-3 grid gap-3 sm:grid-cols-4">
               <Fact label="Compliance" value={formatPercent(svc.slo.compliance)} mono />
@@ -78,6 +112,7 @@ export function ServiceDetail({ id }: { id: string }) {
             <MetricChart data={svc.metrics ?? []} />
             <p className="mt-2 text-[11px] text-muted-foreground">Simulated samples. p95 uses the left axis, error rate the right.</p>
           </Panel>
+          )}
         </TabsContent>
         <TabsContent value="deployments" className="mt-3">
           <DeploymentTable deployments={svc.deployments ?? []} />

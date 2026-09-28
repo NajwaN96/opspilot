@@ -1,16 +1,26 @@
 # Local infrastructure
 
-The supported way to run OpsPilot is two processes: `go run` in `apps/api` and `npm run dev` in `apps/web`. See the repository README.
-
-`docker-compose.yml` is an optional packaging of those same processes. It does not add a database or a cluster. The images are not required for development, and this environment may not have a Docker daemon.
-
-From the repository root, if Docker is available:
+PostgreSQL is the dependency the API needs for durable approvals. The Next.js console stays on the host so the dev server can reload.
 
 ```bash
-docker compose -f infra/docker-compose.yml up --build
+docker compose -f infra/docker-compose.yml up -d postgres
 ```
 
-- Console: http://127.0.0.1:3461
-- API: http://127.0.0.1:8094
+The compose file also defines an API service. It persists to Postgres. It does not mount a kubeconfig, so Kubernetes discovery from that container stays disconnected unless you add a read-only mount yourself. The supported path for discovery is `go run` on the host, which uses the local kubeconfig.
 
-The compose file sets `API_PROXY_URL=http://api:8094` so the Next.js server proxies to the API container. Incident state is still in memory and disappears when the API container stops.
+Development credentials are `opspilot` / `opspilot` on `127.0.0.1:5432`. They are not production secrets. Override them with `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
+
+## Cluster
+
+```bash
+infra/scripts/up-dev-cluster.sh
+```
+
+That creates k3d cluster `opspilot-dev` (one server, no agents, k3s v1.31.4) and applies `infra/kubernetes/demo-shop.yaml`.
+
+Namespaces:
+
+- `opspilot-system` for later OpsPilot components
+- `demo-shop` for storefront, checkout-api, payment-api, orders-api, and inventory-api
+
+If the k3d load balancer cannot open the API port, the script points kubeconfig at the server container IP. Do not commit that kubeconfig.

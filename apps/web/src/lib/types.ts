@@ -114,6 +114,12 @@ export interface Service {
   deployments?: Deployment[];
   metrics?: MetricPoint[];
   openIncidents?: string[];
+  source: "simulation" | "kubernetes" | string;
+  telemetry: "simulated" | "none" | string;
+  image?: string;
+  workloadKind?: string;
+  restarts?: number;
+  lastObserved?: string;
 }
 
 export interface Snapshot {
@@ -226,6 +232,21 @@ export interface Incident {
   recommendation?: Recommendation;
   remediation?: Remediation;
   snapshot: Snapshot;
+  audit?: AuditRecord[];
+}
+
+export interface AuditRecord {
+  id: number;
+  at: string;
+  actor: string;
+  incidentId: string;
+  proposalId?: string;
+  action: string;
+  policyResult: string;
+  approvalResult: string;
+  executionStatus: string;
+  verificationResult: string;
+  detail: string;
 }
 
 export interface Scenario {
@@ -260,4 +281,66 @@ export interface Health {
   status: string;
   service: string;
   version: string;
+}
+
+export interface ReadyStatus {
+  status: string;
+  database: string;
+  kubernetes: string;
+  demoResetEnabled: boolean;
+}
+
+export interface KubernetesStatus {
+  cluster: string;
+  mode: string;
+  namespace: string;
+  namespaces: string[];
+  connectivity: "connected" | "disconnected" | "degraded" | string;
+  kubernetesVersion?: string;
+  lastSync?: string;
+  message?: string;
+  source: string;
+  nodeCount: number;
+  nodesReady: number;
+}
+
+export interface WorkloadPod {
+  name: string;
+  namespace: string;
+  service: string;
+  status: string;
+  ready: string;
+  restarts: number;
+  node: string;
+  startedAt?: string;
+  source: string;
+}
+
+export interface Workload {
+  name: string;
+  namespace: string;
+  kind: string;
+  version: string;
+  image: string;
+  desired: number;
+  ready: number;
+  restarts: number;
+  status: string;
+  lastObserved: string;
+  serviceId: string;
+  source: string;
+  labels?: Record<string, string>;
+  pods?: WorkloadPod[];
+}
+
+export interface ClusterEvent {
+  id: string;
+  at: string;
+  namespace: string;
+  type: string;
+  reason: string;
+  object: string;
+  message: string;
+  count: number;
+  source: string;
 }

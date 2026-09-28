@@ -4,7 +4,7 @@ Kubernetes reliability control plane.
 
 Production incidents are still reconstructed by hand: a deploy lands, latency moves, someone pastes logs into a channel, and a rollback waits on a person who has standing cluster-admin access. OpsPilot is the control plane for that loop. It is meant to detect a change, correlate it with telemetry, explain the likely cause, propose one constrained action, require a human when the policy says so, execute only that action, and verify recovery.
 
-This repository is a local MVP. The cluster, telemetry, analysis, and rollback are simulated. Nothing here talks to Kubernetes, a cloud account, Prometheus, or a model.
+This repository is a local control plane. PostgreSQL stores operational state, and a read-only client discovers workloads on a local Kubernetes cluster. Incident telemetry, root-cause analysis, and rollback execution are still simulated. Nothing here talks to a cloud account, Prometheus, or a model.
 
 ## What it is
 
@@ -46,8 +46,10 @@ browser
   → Next.js console (apps/web)
     → Go API (apps/api)
       → service layer (policy)
-        → executor (simulated)
-        → repository (in-memory)
+        → executor (simulated rollback only)
+        → PostgreSQL
+      → read-only Kubernetes client
+        → local cluster opspilot-dev
 ```
 
 Future collection and action path:
@@ -70,36 +72,32 @@ See [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ## Status
 
-### Implemented
+### Real now
 
-- Monorepo with a Next.js console and a Go HTTP API
-- `GET /health`, clusters, services, service detail, incidents, incident detail
-- Simulated `production-01` with five services and incident `INC-142`
-- Service catalog, overview, deployments, SLOs, infrastructure, settings
-- Incident investigation view: timeline, metrics, logs, traces, Kubernetes events, deployments
-- Root-cause panel marked as simulated, with the evidence used for `INC-142`
-- Approval workflow that policy-checks a rollback and then simulates it
-- Reliability Lab that records simulated experiments and does not touch the incident
-- Repository and executor interfaces, structured request logs, Go tests, frontend tests
+- PostgreSQL persistence for clusters, services, incidents, timeline events, approvals, executions, and the audit trail
+- Local Kubernetes cluster `opspilot-dev` (k3d) with namespaces `opspilot-system` and `demo-shop`
+- Read-only discovery of Deployments, Pods, Services, and Events in `demo-shop`
+- Idempotent sync of those workloads into OpsPilot services, labeled `source: kubernetes`
+- `GET /health` and `GET /ready` (database and Kubernetes connectivity, no secrets)
+- Development-only `POST /api/v1/demo/reset`, which restores `INC-142` and does not delete cluster data
 
 ### Simulated
 
-- Cluster inventory, metrics, logs, traces, and Kubernetes events
+- `production-01` incident telemetry, logs, traces, and the events embedded in `INC-142`
 - The probable cause and its confidence
 - The rollback executor and the health recovery that follows approval
 - Reliability Lab runs
 
 ### Planned
 
-- PostgreSQL instead of the memory store
 - OpenTelemetry, Prometheus, and log/trace backends
 - A real incident engine and a read-only investigator
 - A policy engine with risk classes beyond the single allow rule
-- A Kubernetes executor limited to one named action, still behind approval
+- A constrained Kubernetes remediation, still behind approval, for one named rollback
 - Verification against live SLOs, then a learning loop
-- GitOps and cloud integrations
+- GitOps and AWS/EKS
 
-AWS, Terraform, Prometheus, a live cluster, and an AI provider are intentionally not integrated.
+AWS, Terraform, Prometheus, Grafana, Argo, and an AI provider are intentionally not integrated. The Kubernetes client cannot create, update, delete, or exec.
 
 ## Current MVP
 
@@ -118,20 +116,36 @@ Cluster `production-01` is degraded because `payment-api` is in `INC-142`.
 | Confidence | 91% (simulated) |
 | Recommendation | Roll back to v1.8.1. Risk LOW. Policy Allowed. |
 
-Open the incident and choose **Approve & Execute**. The UI walks approval, rollback, rollout, verification, and resolution. Error rate, latency, and database connections move to the recovered values. Restart the API to play the incident again.
+Open the incident and choose **Approve & Execute**. The UI walks approval, rollback, rollout, verification, and resolution. Error rate, latency, and database connections move to the recovered values. Those numbers are simulated. The approval is stored in PostgreSQL and remains after an API restart. **Reset Demo**, shown only when the API is not in production mode, restores `INC-142` without deleting Kubernetes rows.
 
 ## Running locally
 
-Requirements: Node.js 22, npm, Go 1.22.
+Requirements: Node.js 22, npm, Go 1.22, Docker, k3d, kubectl.
+
+PostgreSQL:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres
+```
+
+Local cluster and demo workloads:
+
+```bash
+infra/scripts/up-dev-cluster.sh
+```
+
+The script creates `opspilot-dev` if needed and points kubeconfig at the node IP when the k3d load balancer cannot reach the API server.
 
 Terminal one:
 
 ```bash
 cd apps/api
+export OPSPILOT_DATABASE_URL=postgres://opspilot:opspilot@127.0.0.1:5432/opspilot?sslmode=disable
+export OPSPILOT_ENV=development
 go run ./cmd/opspilot
 ```
 
-The API listens on [http://127.0.0.1:8094](http://127.0.0.1:8094). `GET /health` returns the process status.
+The API listens on [http://127.0.0.1:8094](http://127.0.0.1:8094). Migrations run on startup. `GET /health` is liveness. `GET /ready` reports database and Kubernetes connectivity. Without `OPSPILOT_DATABASE_URL` the API keeps the in-memory simulation and does not persist approvals.
 
 Terminal two:
 
@@ -141,7 +155,7 @@ npm install
 npm run dev
 ```
 
-The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api` and `/health` to the API. No account and no kubeconfig are required.
+The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api`, `/health`, and `/ready` to the API. No account is required. Kubernetes discovery uses the local kubeconfig and only lists `demo-shop`.
 
 Useful environment variables are listed in [.env.example](.env.example). None are required for the defaults above.
 
@@ -178,14 +192,17 @@ runbooks     payment-api rollback
 
 ## Roadmap
 
-1. Persist incidents and approvals in PostgreSQL.
-2. Ingest OpenTelemetry spans and Prometheus series for one real namespace, read-only.
-3. Replace the seeded analysis with a read-only investigator that can only emit a proposal.
-4. Add a policy check with explicit deny reasons, still in front of a simulated executor.
-5. Implement one Kubernetes action: roll back a single Deployment to a previous ReplicaSet, only after approval, then verify the SLO.
+1. Ingest OpenTelemetry spans and Prometheus series for `demo-shop`, still read-only.
+2. Replace the seeded analysis with a read-only investigator that can only emit a proposal.
+3. Add a policy check with explicit deny reasons, still in front of a simulated executor.
+4. Implement one Kubernetes action: roll back a single Deployment to a previous ReplicaSet, only after approval, then verify health.
+5. Keep the investigator off the mutating client.
 
 ## Decisions
 
 - [0001 — Monorepo](docs/adr/0001-monorepo.md)
 - [0002 — Go control plane](docs/adr/0002-go-control-plane.md)
 - [0003 — Safe remediation](docs/adr/0003-safe-remediation-model.md)
+- [0004 — PostgreSQL persistence](docs/adr/0004-postgresql-persistence.md)
+- [0005 — Read-only Kubernetes](docs/adr/0005-kubernetes-readonly.md)
+- [0006 — Data provenance](docs/adr/0006-data-provenance.md)

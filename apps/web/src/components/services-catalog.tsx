@@ -15,7 +15,7 @@ export function ServicesCatalog() {
 
   return (
     <div>
-      <PageHeader kicker="production-01" title="Services" description="Catalog of workloads on the simulated cluster." />
+      <PageHeader kicker="Catalog" title="Services" description="Simulated services keep their incident telemetry. Kubernetes rows are discovered workloads and do not include those metrics." />
       <div className="border border-border bg-card">
         <Table>
           <caption className="sr-only">Service catalog</caption>
@@ -29,7 +29,7 @@ export function ServicesCatalog() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {services.data.map((service) => (
+            {services.data.filter((service) => service.source !== "kubernetes").map((service) => (
               <TableRow key={service.id}>
                 <TableCell>
                   <Link href={`/services/${service.id}`} className="font-medium hover:underline">
@@ -54,6 +54,50 @@ export function ServicesCatalog() {
                 </TableCell>
               </TableRow>
             ))}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="mt-3 border border-border bg-card">
+        <div className="border-b border-border px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Source: Kubernetes</div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {["Service", "Namespace", "Status", "Version", "Ready", "Image"].map((heading) => (
+                <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {heading}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {services.data.filter((service) => service.source === "kubernetes").length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-sm text-muted-foreground">
+                  No Kubernetes services have been synced yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              services.data
+                .filter((service) => service.source === "kubernetes")
+                .map((service) => (
+                  <TableRow key={service.id}>
+                    <TableCell>
+                      <Link href={`/services/${service.id}`} className="font-medium hover:underline">
+                        {service.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{service.namespace}</TableCell>
+                    <TableCell>
+                      <StatusBadge value={service.status} />
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{service.version || "—"}</TableCell>
+                    <TableCell className="font-mono">
+                      {service.replicas.ready}/{service.replicas.desired}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate font-mono text-xs">{service.image || "—"}</TableCell>
+                  </TableRow>
+                ))
+            )}
           </TableBody>
         </Table>
       </div>

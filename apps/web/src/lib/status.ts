@@ -1,9 +1,9 @@
 export type Tone = "good" | "warn" | "bad" | "info" | "neutral";
 
 const groups: Record<Tone, string[]> = {
-  good: ["healthy", "resolved", "succeeded", "ready", "ok", "allowed", "complete", "completed"],
+  good: ["healthy", "resolved", "succeeded", "ready", "ok", "allowed", "complete", "completed", "connected", "approved", "active"],
   warn: ["degraded", "investigating", "warning", "suspect", "running", "mitigating", "in-progress"],
-  bad: ["critical", "error", "sev-1", "sev-2", "failed"],
+  bad: ["critical", "error", "sev-1", "sev-2", "failed", "disconnected"],
   info: ["sev-3", "info", "simulated", "normal"],
   neutral: [],
 };

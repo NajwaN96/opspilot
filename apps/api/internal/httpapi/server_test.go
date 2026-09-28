@@ -279,3 +279,45 @@ func TestClusterAndExperiment(t *testing.T) {
 		t.Fatalf("experiment %#v", experiment)
 	}
 }
+
+func TestReadyAndDemoResetGate(t *testing.T) {
+	srv := newTestServer(t)
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.Header.Get("X-Request-ID") == "" {
+		t.Fatal("missing request id")
+	}
+	var ready map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&ready); err != nil {
+		t.Fatal(err)
+	}
+	if ready["database"] != "memory" || ready["kubernetes"] != "disconnected" || ready["demoResetEnabled"] != false {
+		t.Fatalf("ready %#v", ready)
+	}
+	reset, err := http.Post(srv.URL+"/api/v1/demo/reset", "application/json", bytes.NewBufferString(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reset.Body.Close()
+	if reset.StatusCode != http.StatusForbidden {
+		t.Fatalf("reset status %d", reset.StatusCode)
+	}
+
+	statusRes, err := http.Get(srv.URL + "/api/v1/kubernetes/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer statusRes.Body.Close()
+	var status map[string]any
+	if err := json.NewDecoder(statusRes.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status["connectivity"] != "disconnected" || status["source"] != "none" {
+		t.Fatalf("k8s status %#v", status)
+	}
+}
