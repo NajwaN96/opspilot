@@ -49,9 +49,9 @@ The local SLO is separate: 99.9% availability over a 15-minute observation windo
 
 If a Reliability Lab experiment is running, stop it. That clears the in-process fault. It does not roll back a Deployment and it is not production remediation.
 
-Do not approve a Kubernetes rollback from this incident. The API rejects `POST /api/v1/incidents/INC-REAL-…/remediations`.
+The API still rejects action `rollback` on `INC-REAL-…`. Action `rollback-payment-api` is allowed only when the observed version is `1.5.0-bad`. See `runbooks/payment-api-rollback.md`.
 
-The fault also expires on its own. The maximum duration is 5 minutes. The console offers 30, 60, or 120 seconds.
+The lab fault also expires on its own. The maximum duration is 5 minutes. The console offers 30, 60, or 120 seconds.
 
 ## Verification
 

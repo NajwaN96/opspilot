@@ -8,8 +8,8 @@ import type { Health } from "@/lib/types";
 const rows = [
   ["Data source", "In-memory repository. PostgreSQL is the planned replacement."],
   ["Cluster access", "None. The executor is simulated and does not load a kubeconfig."],
-  ["Remediation", "Human approval, then a constrained simulated rollback for INC-142."],
-  ["Policy", "Only the pre-approved rollback of payment-api v1.8.2 to v1.8.1 is allowed."],
+  ["Remediation", "INC-142 stays simulated. A detected incident can approve one real rollback of demo-shop/payment-api from 1.5.0-bad to 1.4.2."],
+  ["Policy", "The live action cannot target another namespace or Deployment, and the browser cannot supply an image."],
   ["AI investigator", "Not connected. Future recommendations must pass policy before any executor runs."],
   ["Telemetry", "Metrics, logs, traces, and events on the incident page are simulated."],
 ];

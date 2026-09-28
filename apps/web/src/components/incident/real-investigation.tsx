@@ -8,14 +8,29 @@ import { Button } from "@/components/ui/button";
 import { apiPost } from "@/lib/api";
 import { formatClock, formatDuration, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { Experiment, ExperimentCatalog, Incident } from "@/lib/types";
+import type { Experiment, ExperimentCatalog, Incident, Remediation } from "@/lib/types";
 
 export function RealInvestigation({ incident, onReload }: { incident: Incident; onReload: () => Promise<void> }) {
   const experiments = useApi<ExperimentCatalog>("/api/v1/experiments", 2000);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const running = experiments.data?.realRuns?.find((run) => run.status === "running");
-  const recovered = Boolean(incident.telemetryRecoveredAt);
+  const recovered = Boolean(incident.telemetryRecoveredAt) && incident.status !== "resolved";
+  const rollback = incident.recommendation?.action === "rollback-payment-api" && incident.recommendation.allowed;
+  const busy = incident.remediation && ["rolling", "verifying", "succeeded"].includes(incident.remediation.status);
+
+  async function approve() {
+    setPending(true);
+    setActionError(null);
+    try {
+      await apiPost<Remediation>(`/api/v1/incidents/${incident.id}/remediations`, { action: "rollback-payment-api" });
+      await onReload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Rollback failed");
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function stop(run: Experiment) {
     setPending(true);
@@ -147,22 +162,57 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
           </ul>
         </Panel>
       </div>
-      <div className="mt-3">
+      <div className="mt-3 grid gap-3 xl:grid-cols-2">
         <Panel title="Remediation proposal">
           <p className="text-sm">{incident.recommendation?.summary}</p>
           <p className="mt-2 text-sm text-muted-foreground">{incident.recommendation?.policy}</p>
-          <p className="mt-2 text-xs uppercase tracking-wide text-amber-200">Simulated production rollback is not available for this incident.</p>
+          {rollback ? (
+            <p className="mt-2 text-sm">
+              Approval updates only <span className="font-mono">demo-shop/payment-api</span> from{" "}
+              <span className="font-mono">{incident.recommendation?.from}</span> to{" "}
+              <span className="font-mono">{incident.recommendation?.to}</span>. The image is chosen on the server.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs uppercase tracking-wide text-amber-200">Kubernetes rollback is not available for this incident.</p>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
+            {rollback && !busy ? (
+              <Button disabled={pending} onClick={() => void approve()}>
+                {pending ? "Rolling back…" : "Approve & Execute"}
+              </Button>
+            ) : null}
             <Button variant="outline" render={<Link href="/reliability-lab" />}>
               Open Reliability Lab
             </Button>
             {running ? (
-              <Button disabled={pending} onClick={() => void stop(running)}>
+              <Button variant="outline" disabled={pending} onClick={() => void stop(running)}>
                 {pending ? "Stopping…" : "Stop Experiment"}
               </Button>
             ) : null}
           </div>
+          {incident.remediation ? (
+            <ol className="mt-3 space-y-2">
+              {incident.remediation.steps.map((step) => (
+                <li key={step.name} className="flex items-center justify-between gap-3 text-sm">
+                  <span>{step.name}</span>
+                  <StatusBadge value={step.status} />
+                </li>
+              ))}
+            </ol>
+          ) : null}
           {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+        </Panel>
+        <Panel title="Audit trail">
+          {(incident.audit ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No audit events yet.</p> : null}
+          <ul className="space-y-2">
+            {(incident.audit ?? []).map((record) => (
+              <li key={record.id} className="text-sm">
+                <div className="font-mono text-[11px] text-muted-foreground">{formatClock(record.at)} · {record.actor}</div>
+                <div>{record.action} · {record.executionStatus || record.approvalResult}</div>
+                <p className="text-muted-foreground">{record.detail}</p>
+              </li>
+            ))}
+          </ul>
         </Panel>
       </div>
     </div>

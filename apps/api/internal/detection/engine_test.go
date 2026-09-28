@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/opspilot/opspilot/apps/api/internal/model"
+	"github.com/opspilot/opspilot/apps/api/internal/release"
 	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
 )
 
@@ -33,6 +34,7 @@ type fakeSink struct {
 	found      bool
 	created    int
 	recoveredN int
+	last       Record
 }
 
 func (f *fakeSink) ActiveDetected(context.Context, string) (string, bool, bool, error) {
@@ -44,7 +46,11 @@ func (f *fakeSink) CreateDetected(_ context.Context, record Record) error {
 	f.found = true
 	f.id = record.ID
 	f.recovered = false
-	if record.Analysis.LikelyCause == "" || record.Recommendation.Allowed {
+	f.last = record
+	if record.Analysis.LikelyCause == "" {
+		return errAllowed
+	}
+	if record.Snapshot.Version != release.BadVersion && record.Recommendation.Allowed {
 		return errAllowed
 	}
 	return nil
@@ -60,6 +66,16 @@ func (f *fakeSink) ResumeDetected(context.Context, string, string) error {
 	f.recovered = false
 	return nil
 }
+
+func (f *fakeSink) NoteVersion(context.Context, string, string) error { return nil }
+
+type versionCluster struct{ version string }
+
+func (v versionCluster) Workload(context.Context, string, string) (model.Workload, error) {
+	return model.Workload{Name: Service, Namespace: Namespace, Version: v.version, Desired: 1, Ready: 1}, nil
+}
+
+func (versionCluster) Events(context.Context) ([]model.ClusterEvent, error) { return nil, nil }
 
 var errAllowed = errorString("recommendation must not be executable")
 
@@ -120,5 +136,27 @@ func TestEngineIgnoresMissingTelemetry(t *testing.T) {
 	}
 	if sink.created != 0 {
 		t.Fatal("missing telemetry opened an incident")
+	}
+}
+
+func TestBadReleaseProposesTheFixedRollback(t *testing.T) {
+	sink := &fakeSink{}
+	bad := telemetry.Snapshot{Available: true, Requests: 80, Errors: 24, ErrorRate: 0.3, P95: 0.5}
+	engine := &Engine{
+		Metrics: fakeMetrics{snap: bad}, Cluster: versionCluster{version: release.BadVersion},
+		Sink: sink, ClusterName: "opspilot-dev",
+	}
+	if err := engine.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	rec := sink.last.Recommendation
+	if !rec.Allowed || rec.Action != release.Action || rec.From != release.BadVersion || rec.To != release.GoodVersion {
+		t.Fatalf("%#v", rec)
+	}
+	if sink.last.Analysis.LikelyCause == "" || sink.last.Snapshot.Version != release.BadVersion {
+		t.Fatalf("%#v", sink.last.Analysis)
 	}
 }

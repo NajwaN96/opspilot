@@ -80,6 +80,13 @@ func TestRealIncidentCannotRollBack(t *testing.T) {
 	}
 }
 
+func TestDeployBadPaymentIsDisabledByDefault(t *testing.T) {
+	svc := testService(t)
+	if err := svc.DeployBadPayment(context.Background()); !errors.Is(err, repository.ErrForbidden) {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestRealExperimentRequiresLab(t *testing.T) {
 	svc := testService(t)
 	_, err := svc.StartExperiment(context.Background(), "k8s_demo-shop_payment-api", "payment-api-degraded", 60)

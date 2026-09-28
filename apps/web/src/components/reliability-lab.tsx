@@ -63,6 +63,7 @@ export function ReliabilityLab() {
         description="Real experiments are limited to payment-api in demo-shop. The scenarios below that remain simulated do not change the cluster."
       />
       <RealExperiment />
+      <BadRelease />
       <h2 className="mb-2 mt-6 text-sm font-medium uppercase tracking-wide text-muted-foreground">Simulated</h2>
       <p className="mb-3 text-sm text-muted-foreground">{catalog.data.notice}</p>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
@@ -170,6 +171,44 @@ export function ReliabilityLab() {
           )}
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function BadRelease() {
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function deploy() {
+    setPending(true);
+    setActionError(null);
+    setMessage(null);
+    try {
+      await apiPost<{ version: string }>("/api/v1/rollouts/payment-api/bad", {});
+      setMessage("payment-api is ready on the known bad release 1.5.0-bad. This did not change the Reliability Lab fault.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Deploy failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <Panel title="Known bad release" action={<span className="text-[11px] uppercase tracking-wide text-amber-200">Development only</span>}>
+        <p className="text-sm font-medium">Deploy Bad payment</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Replaces demo-shop/payment-api with the server-known image for 1.5.0-bad. The pod stays Ready, adds 500ms, and returns HTTP 500 on about 30% of requests. The request does not accept an image name.
+        </p>
+        <div className="mt-3">
+          <Button disabled={pending} onClick={() => void deploy()}>
+            {pending ? "Deploying…" : "Deploy Bad payment"}
+          </Button>
+        </div>
+        {message ? <p className="mt-2 text-sm text-amber-100">{message}</p> : null}
+        {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+      </Panel>
     </div>
   );
 }

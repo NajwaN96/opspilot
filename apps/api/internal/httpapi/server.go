@@ -5,11 +5,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/opspilot/opspilot/apps/api/internal/kubernetes"
+	"github.com/opspilot/opspilot/apps/api/internal/release"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 	"github.com/opspilot/opspilot/apps/api/internal/service"
 	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
@@ -51,6 +53,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/experiments", s.listExperiments)
 	mux.HandleFunc("POST /api/v1/experiments", s.startExperiment)
 	mux.HandleFunc("POST /api/v1/experiments/{id}/stop", s.stopExperiment)
+	mux.HandleFunc("POST /api/v1/rollouts/payment-api/bad", s.deployBadPayment)
 	mux.HandleFunc("GET /api/v1/kubernetes/status", s.kubernetesStatus)
 	mux.HandleFunc("GET /api/v1/kubernetes/namespaces", s.kubernetesNamespaces)
 	mux.HandleFunc("GET /api/v1/kubernetes/workloads", s.kubernetesWorkloads)
@@ -184,6 +187,27 @@ func (s *Server) startExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, item)
+}
+
+func (s *Server) deployBadPayment(w http.ResponseWriter, r *http.Request) {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var body struct{}
+	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeAPIError(w, http.StatusBadRequest, "invalid", "this action does not accept parameters")
+		return
+	}
+	if err := s.svc.DeployBadPayment(r.Context()); err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"action":     "deploy-bad-payment",
+		"cluster":    release.Cluster,
+		"namespace":  release.Namespace,
+		"deployment": release.Deployment,
+		"version":    release.BadVersion,
+	})
 }
 
 func (s *Server) writeErr(w http.ResponseWriter, err error) {

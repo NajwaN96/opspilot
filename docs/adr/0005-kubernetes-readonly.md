@@ -21,5 +21,5 @@ The local cluster is k3d, named `opspilot-dev`. It is not EKS and it is not crea
 ## Consequences
 
 - Workload health in the UI can be real while incident metrics stay simulated. Provenance fields keep those apart.
-- A later mutating executor must be a different type, constructed only after policy and approval, and it must not be passed to the investigator.
+- A later mutating executor must be a different type, constructed only after policy and approval, and it must not be passed to the investigator. ADR 0011 adds that type for one payment-api rollback. It is not part of `Reader`.
 - If kubeconfig is missing, the API stays up and reports the cluster as disconnected. It does not invent workloads.

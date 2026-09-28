@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opspilot/opspilot/apps/api/internal/executor"
 	"github.com/opspilot/opspilot/apps/api/internal/experiment"
 	"github.com/opspilot/opspilot/apps/api/internal/model"
+	"github.com/opspilot/opspilot/apps/api/internal/release"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 )
 
@@ -18,11 +21,24 @@ type realLab interface {
 	Stop(ctx context.Context, id string) (model.Experiment, error)
 }
 
+type paymentLedger interface {
+	BeginPaymentRollback(ctx context.Context, incidentID string) (model.Remediation, bool, error)
+	MarkPaymentExecution(ctx context.Context, incidentID, status, detail string) error
+}
+
+type paymentWatcher interface {
+	Watch(incidentID string)
+}
+
 type Service struct {
 	repo           repository.Catalog
 	exec           executor.Executor
 	allowDemoReset bool
+	allowRollouts  bool
 	lab            realLab
+	payment        executor.PaymentRollback
+	releaser       executor.PaymentMutator
+	watcher        paymentWatcher
 }
 
 func New(repo repository.Catalog, exec executor.Executor) *Service {
@@ -38,6 +54,19 @@ func (s *Service) SetDemoResetEnabled(enabled bool) {
 // SetLab attaches the constrained local experiment controller.
 func (s *Service) SetLab(lab realLab) {
 	s.lab = lab
+}
+
+// SetRolloutsEnabled arms the development-only bad payment release.
+func (s *Service) SetRolloutsEnabled(enabled bool) {
+	s.allowRollouts = enabled
+}
+
+// SetPaymentRollback attaches the constrained payment-api mutator.
+// The detection engine does not receive this value.
+func (s *Service) SetPaymentRollback(mutator executor.PaymentMutator, watcher paymentWatcher) {
+	s.releaser = mutator
+	s.payment = executor.PaymentRollback{Mutator: mutator}
+	s.watcher = watcher
 }
 
 func (s *Service) ListClusters(ctx context.Context) ([]model.Cluster, error) {
@@ -68,7 +97,10 @@ func (s *Service) ListExperiments(ctx context.Context) (model.ExperimentCatalog,
 // request to the executor. The executor cannot choose a different action.
 func (s *Service) StartRemediation(ctx context.Context, incidentID, action string) (model.Remediation, error) {
 	if strings.HasPrefix(incidentID, "INC-REAL-") {
-		return model.Remediation{}, fmt.Errorf("%w: detected incidents cannot run a Kubernetes rollback", repository.ErrInvalid)
+		if action != release.Action {
+			return model.Remediation{}, fmt.Errorf("%w: detected incidents cannot run a Kubernetes rollback", repository.ErrInvalid)
+		}
+		return s.startPaymentRollback(ctx, incidentID, action)
 	}
 	if action == "" {
 		return model.Remediation{}, fmt.Errorf("%w: action is required", repository.ErrInvalid)
@@ -142,6 +174,96 @@ func (s *Service) StartExperiment(ctx context.Context, serviceID, scenario strin
 		return model.Experiment{}, fmt.Errorf("%w: duration must be between 15 and 300 seconds", repository.ErrInvalid)
 	}
 	return s.repo.StartExperiment(ctx, serviceID, scenario, durationSec)
+}
+
+func (s *Service) startPaymentRollback(ctx context.Context, incidentID, action string) (model.Remediation, error) {
+	incident, err := s.repo.GetIncident(ctx, incidentID)
+	if err != nil {
+		return model.Remediation{}, err
+	}
+	if incident.Remediation != nil {
+		switch incident.Remediation.Status {
+		case "rolling", "verifying", "succeeded":
+			if incident.Remediation.Status == "verifying" && s.watcher != nil {
+				s.watcher.Watch(incident.ID)
+			}
+			return *incident.Remediation, nil
+		}
+	}
+	if incident.Status == "resolved" {
+		if incident.Remediation != nil {
+			return *incident.Remediation, nil
+		}
+		return model.Remediation{}, fmt.Errorf("%w: incident is resolved", repository.ErrInvalid)
+	}
+	if incident.Recommendation == nil || !incident.Recommendation.Allowed || incident.Recommendation.Action != action {
+		return model.Remediation{}, fmt.Errorf("%w: policy denied this action", repository.ErrInvalid)
+	}
+	if incident.Recommendation.From != release.BadVersion || incident.Recommendation.To != release.GoodVersion {
+		return model.Remediation{}, fmt.Errorf("%w: policy denied this action", repository.ErrInvalid)
+	}
+	ledger, ok := s.repo.(paymentLedger)
+	if !ok || s.payment.Mutator == nil {
+		return model.Remediation{}, fmt.Errorf("%w: payment rollback is not configured", repository.ErrForbidden)
+	}
+	started, proceed, err := ledger.BeginPaymentRollback(ctx, incident.ID)
+	if err != nil {
+		return model.Remediation{}, err
+	}
+	if !proceed {
+		if started.Status == "verifying" && s.watcher != nil {
+			s.watcher.Watch(incident.ID)
+		}
+		return started, nil
+	}
+	err = s.payment.Execute(ctx, executor.Request{
+		IncidentID: incident.ID,
+		Action:     action,
+		Service:    release.Deployment,
+		Namespace:  release.Namespace,
+		From:       release.BadVersion,
+		To:         release.GoodVersion,
+	})
+	if err != nil {
+		_ = ledger.MarkPaymentExecution(ctx, incident.ID, "failed", err.Error())
+		if errors.Is(err, release.ErrDenied) {
+			return model.Remediation{}, fmt.Errorf("%w: %s", repository.ErrInvalid, err.Error())
+		}
+		return model.Remediation{}, err
+	}
+	detail := "demo-shop/payment-api image is " + release.GoodImage + ". Prometheus verification is still running."
+	if err := ledger.MarkPaymentExecution(ctx, incident.ID, "verifying", detail); err != nil {
+		return model.Remediation{}, err
+	}
+	if s.watcher != nil {
+		s.watcher.Watch(incident.ID)
+	}
+	updated, err := s.repo.GetIncident(ctx, incident.ID)
+	if err != nil {
+		return model.Remediation{}, err
+	}
+	if updated.Remediation == nil {
+		return model.Remediation{}, fmt.Errorf("payment rollback was not recorded")
+	}
+	return *updated.Remediation, nil
+}
+
+// DeployBadPayment rolls payment-api to the known bad release. Development only.
+// The request carries no image, namespace, or manifest.
+func (s *Service) DeployBadPayment(ctx context.Context) error {
+	if !s.allowRollouts || s.releaser == nil {
+		return fmt.Errorf("%w: bad payment releases are disabled", repository.ErrForbidden)
+	}
+	if err := s.releaser.SetPaymentRelease(ctx, release.BadImage, release.BadVersion); err != nil {
+		if errors.Is(err, release.ErrDenied) {
+			return fmt.Errorf("%w: %s", repository.ErrInvalid, err.Error())
+		}
+		return err
+	}
+	if err := s.releaser.WaitPaymentReady(ctx, release.BadImage, 90*time.Second); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ResetDemo restores only the seeded INC-142 simulation.

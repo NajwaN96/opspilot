@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/opspilot/opspilot/apps/api/internal/model"
+	"github.com/opspilot/opspilot/apps/api/internal/release"
 	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
 )
 
@@ -33,6 +34,7 @@ type Sink interface {
 	CreateDetected(ctx context.Context, record Record) error
 	MarkRecovered(ctx context.Context, id, detail string) error
 	ResumeDetected(ctx context.Context, id, detail string) error
+	NoteVersion(ctx context.Context, id, version string) error
 }
 
 // Record is the bounded incident written when the rule opens.
@@ -83,6 +85,13 @@ func (e *Engine) Tick(ctx context.Context) error {
 	id, recovered, found, err := e.Sink.ActiveDetected(ctx, fingerprint)
 	if err != nil {
 		return err
+	}
+	if found && e.Cluster != nil {
+		if workload, werr := e.Cluster.Workload(ctx, Namespace, Service); werr == nil && workload.Version != "" {
+			if err := e.Sink.NoteVersion(ctx, id, workload.Version); err != nil {
+				return err
+			}
+		}
 	}
 	now := e.now()
 	switch {
@@ -219,14 +228,8 @@ func (e *Engine) record(ctx context.Context, now time.Time, snap telemetry.Snaps
 			Contradicting: finding.Contradicting,
 			Evidence:      finding.Supporting,
 		},
-		Recommendation: model.Recommendation{
-			Action:  "stop-experiment",
-			Summary: "Disable the active Reliability Lab fault if one is running. This does not roll back a Deployment.",
-			Risk:    "Local demo-shop only. Kubernetes mutation is not permitted in this phase.",
-			Policy:  "Real Kubernetes rollback is deferred. The constrained Stop Experiment control is separate from production remediation.",
-			Allowed: false,
-		},
-		Events: events,
+		Recommendation: release.Propose(version),
+		Events:         events,
 		Thresholds: map[string]any{
 			"rule":         RuleID,
 			"minRequests":  MinRequests,

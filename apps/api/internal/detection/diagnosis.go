@@ -1,6 +1,10 @@
 package detection
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/opspilot/opspilot/apps/api/internal/release"
+)
 
 // Finding is a deterministic explanation. It has no confidence percentage.
 type Finding struct {
@@ -35,6 +39,9 @@ func Diagnose(facts Facts) Finding {
 	if facts.Version != "" {
 		supporting = append(supporting, "current workload version is "+facts.Version)
 	}
+	if facts.Version == release.BadVersion {
+		supporting = append(supporting, "payment-api 1.5.0-bad is the known bad release")
+	}
 	if facts.Desired > 0 && facts.Ready >= facts.Desired {
 		contradicting = append(contradicting, "Kubernetes replicas remained ready, which does not support a pod-availability failure")
 	}
@@ -47,6 +54,9 @@ func Diagnose(facts Facts) Finding {
 	cause := "Signals are mixed. Compare the error rate, latency, traces, and replica counts before treating this as an application fault."
 	if facts.Desired > 0 && facts.Ready >= facts.Desired && (facts.ErrorRate > ErrorRate || facts.P95 > P95Seconds) {
 		cause = "Application-level degradation in payment-api rather than pod availability failure."
+	}
+	if facts.Version == release.BadVersion && facts.Desired > 0 && facts.Ready >= facts.Desired {
+		cause = "payment-api is running known bad release 1.5.0-bad. Ready replicas do not explain the errors."
 	}
 	if facts.Desired > 0 && facts.Ready < facts.Desired {
 		cause = "payment-api has unavailable replicas. An application fault is not the only explanation."

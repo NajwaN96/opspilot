@@ -33,6 +33,10 @@ import (
 	"github.com/opspilot/opspilot/apps/demo/internal/fault"
 )
 
+// bakedFault is compiled into a release. "degraded" is the known bad payment-api build.
+// The good image leaves it empty. The Reliability Lab fault is a separate runtime switch.
+var bakedFault = ""
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	name := env("SERVICE_NAME", "storefront")
@@ -166,6 +170,15 @@ func (a *app) pay(w http.ResponseWriter, r *http.Request) {
 	latency := a.fault.Latency
 	percent := a.fault.ErrorPercent
 	a.mu.Unlock()
+	if bakedFault == "degraded" {
+		active = true
+		if latency < 500*time.Millisecond {
+			latency = 500 * time.Millisecond
+		}
+		if percent < 30 {
+			percent = 30
+		}
+	}
 
 	if active && latency > 0 {
 		timer := time.NewTimer(latency)

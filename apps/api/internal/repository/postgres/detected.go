@@ -12,6 +12,7 @@ import (
 
 	"github.com/opspilot/opspilot/apps/api/internal/detection"
 	"github.com/opspilot/opspilot/apps/api/internal/model"
+	"github.com/opspilot/opspilot/apps/api/internal/release"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 )
 
@@ -194,12 +195,16 @@ func (s *Store) getDetected(ctx context.Context, id string) (model.Incident, err
 	blob.Analysis.Supporting = finding.Supporting
 	blob.Analysis.Contradicting = finding.Contradicting
 	blob.Analysis.Evidence = finding.Supporting
-	blob.Recommendation.Allowed = false
+	blob.Recommendation = release.Propose(blob.Facts.Version)
 	events, err := s.detectedEvents(ctx, id)
 	if err != nil {
 		return model.Incident{}, err
 	}
 	audit, err := s.listAudit(ctx, id)
+	if err != nil {
+		return model.Incident{}, err
+	}
+	remediation, err := s.paymentRemediation(ctx, id)
 	if err != nil {
 		return model.Incident{}, err
 	}
@@ -218,6 +223,7 @@ func (s *Store) getDetected(ctx context.Context, id string) (model.Incident, err
 	item.Evidence = &blob.Evidence
 	item.Analysis = &blob.Analysis
 	item.Recommendation = &blob.Recommendation
+	item.Remediation = remediation
 	item.Snapshot = blob.Snapshot
 	item.Audit = audit
 	item.Origin = "detection-engine"

@@ -22,6 +22,7 @@ import (
 	"github.com/opspilot/opspilot/apps/api/internal/repository/postgres"
 	"github.com/opspilot/opspilot/apps/api/internal/service"
 	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
+	"github.com/opspilot/opspilot/apps/api/internal/verify"
 )
 
 func main() {
@@ -62,6 +63,20 @@ func main() {
 	sources := telemetrySources(kubeClient)
 	svc := service.New(repo, executor.Simulated{Logger: logger})
 	svc.SetDemoResetEnabled(cfg.AllowDemoReset && (pg == nil || pg.DemoResetAllowed()))
+	svc.SetRolloutsEnabled(cfg.AllowExperiments && kubeClient != nil)
+	if kubeClient != nil && pg != nil {
+		watcher := &verify.Watcher{
+			Metrics: sources.Prometheus,
+			Image: func(ctx context.Context) (string, error) {
+				image, _, err := kubeClient.CurrentPayment(ctx)
+				return image, err
+			},
+			Store:  pg,
+			Logger: logger,
+		}
+		svc.SetPaymentRollback(kubeClient, watcher)
+		watcher.Resume(ctx)
+	}
 	if pg != nil && kubeClient != nil && cfg.AllowExperiments {
 		lab := &experiment.Controller{
 			Policy: experiment.Policy{Allow: true},

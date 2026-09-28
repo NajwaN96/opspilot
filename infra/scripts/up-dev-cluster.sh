@@ -41,7 +41,15 @@ import_image rancher/mirrored-coredns-coredns:1.12.0
 kubectl -n kube-system delete pod -l k8s-app=kube-dns --wait=false >/dev/null 2>&1 || true
 kubectl --request-timeout=30s -n kube-system rollout status deployment/coredns --timeout=180s
 
+if ! docker image inspect opspilot-demo:1.4.2 >/dev/null 2>&1; then
+  docker build -t opspilot-demo:1.4.2 -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
+fi
+if ! docker image inspect opspilot-demo:1.5.0-bad >/dev/null 2>&1; then
+  docker build -t opspilot-demo:1.5.0-bad --build-arg BAKED_FAULT=degraded -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
+fi
 import_image opspilot-demo:0.3.0
+import_image opspilot-demo:1.4.2
+import_image opspilot-demo:1.5.0-bad
 import_image prom/prometheus:v2.55.1
 import_image otel/opentelemetry-collector:0.115.1
 import_image jaegertracing/all-in-one:1.62.0
