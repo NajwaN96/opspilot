@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiPost } from "@/lib/api";
+import { formatDuration, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { Experiment, ExperimentCatalog, Service } from "@/lib/types";
+import type { Experiment, ExperimentCatalog, Service, TelemetrySnapshot } from "@/lib/types";
 
 const durations = [
   { value: "30", label: "30 seconds" },
@@ -57,10 +58,13 @@ export function ReliabilityLab() {
   return (
     <div>
       <PageHeader
-        kicker="Simulation only"
+        kicker="Local cluster"
         title="Reliability Lab"
-        description={catalog.data.notice}
+        description="Real experiments are limited to payment-api in demo-shop. The scenarios below that remain simulated do not change the cluster."
       />
+      <RealExperiment />
+      <h2 className="mb-2 mt-6 text-sm font-medium uppercase tracking-wide text-muted-foreground">Simulated</h2>
+      <p className="mb-3 text-sm text-muted-foreground">{catalog.data.notice}</p>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
         <div className="grid gap-2 sm:grid-cols-2">
           {catalog.data.scenarios.map((item) => {
@@ -166,6 +170,130 @@ export function ReliabilityLab() {
           )}
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function RealExperiment() {
+  const catalog = useApi<ExperimentCatalog>("/api/v1/experiments", 2000);
+  const telemetry = useApi<TelemetrySnapshot>("/api/v1/services/k8s_demo-shop_payment-api/telemetry", 2000);
+  const [duration, setDuration] = useState("60");
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  const running = catalog.data?.realRuns?.find((run) => run.status === "running");
+  const elapsed = running ? Math.max(0, now - Date.parse(running.startedAt)) : 0;
+  const remaining = running ? Math.max(0, Date.parse(running.endsAt) - now) : 0;
+
+  async function start() {
+    setPending(true);
+    setActionError(null);
+    try {
+      await apiPost<Experiment>("/api/v1/experiments", {
+        serviceId: "k8s_demo-shop_payment-api",
+        scenario: "payment-api-degraded",
+        durationSec: Number(duration),
+      });
+      await catalog.reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Experiment failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function stop(id: string) {
+    setPending(true);
+    setActionError(null);
+    try {
+      await apiPost<Experiment>(`/api/v1/experiments/${id}/stop`, {});
+      await catalog.reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Stop failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Panel title="Real local experiment" action={<span className="text-[11px] uppercase tracking-wide text-amber-200">Real local experiment</span>}>
+      <p className="text-sm font-medium text-amber-100">Local demo-shop only. Experiment automatically expires.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        payment-api answers 40% of requests with HTTP 500 and adds 500ms of latency. The fault lives in the process and does not change the Deployment.
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Service</div>
+          <div className="mt-1 font-mono text-sm">payment-api</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Scenario</div>
+          <div className="mt-1 text-sm">Elevated Latency + Errors</div>
+        </div>
+        <label className="block text-xs text-muted-foreground">
+          Duration
+          <Select items={durations} value={duration} onValueChange={(value) => { if (typeof value === "string") setDuration(value); }}>
+            <SelectTrigger className="mt-1 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {durations.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button disabled={pending || Boolean(running)} onClick={() => void start()}>
+          {pending && !running ? "Starting…" : "Start Experiment"}
+        </Button>
+        {running ? (
+          <Button variant="outline" disabled={pending} onClick={() => void stop(running.id)}>
+            Stop Experiment
+          </Button>
+        ) : null}
+      </div>
+      {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+      {running ? (
+        <div className="mt-3 grid gap-3 border border-amber-400/30 bg-amber-400/10 p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat label="Status" value="Experiment Running" />
+          <Stat label="Elapsed" value={formatDuration(elapsed)} />
+          <Stat label="Remaining" value={formatDuration(remaining)} />
+          <Stat label="Injected conditions" value="40% HTTP 500 · +500ms" />
+          <Stat label="Observed error rate" value={telemetry.data?.available ? formatPercent(telemetry.data.errorRate * 100) : "Telemetry unavailable"} />
+          <Stat label="Observed p95" value={telemetry.data?.available ? formatLatency(telemetry.data.p95LatencyMs) : "Telemetry unavailable"} />
+        </div>
+      ) : null}
+      {(catalog.data?.realRuns ?? []).length > 0 ? (
+        <ul className="mt-3">
+          {catalog.data?.realRuns?.map((run) => (
+            <li key={run.id} className="flex flex-wrap items-center gap-2 border-t border-border py-2 text-sm">
+              <span className="font-mono text-xs">{run.id}</span>
+              <StatusBadge value={run.status} />
+              <span className="text-xs uppercase tracking-wide text-amber-200">Real local experiment</span>
+              <span className="text-xs text-muted-foreground">{run.note}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Panel>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-sm">{value}</div>
     </div>
   );
 }

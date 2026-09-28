@@ -4,7 +4,7 @@ Kubernetes reliability control plane.
 
 Production incidents are still reconstructed by hand: a deploy lands, latency moves, someone pastes logs into a channel, and a rollback waits on a person who has standing cluster-admin access. OpsPilot is the control plane for that loop. It is meant to detect a change, correlate it with telemetry, explain the likely cause, propose one constrained action, require a human when the policy says so, execute only that action, and verify recovery.
 
-This repository is a local control plane. PostgreSQL stores operational state, and a read-only client discovers workloads on a local Kubernetes cluster. Incident telemetry, root-cause analysis, and rollback execution are still simulated. Nothing here talks to a cloud account, Prometheus, or a model.
+This repository is a local control plane. PostgreSQL stores operational state, a read-only client discovers workloads on a local Kubernetes cluster, and demo-shop emits real Prometheus metrics and OpenTelemetry traces. A deterministic rule can open an incident from that telemetry. Rollback execution for `INC-142` is still simulated. Nothing here talks to a cloud account or a model.
 
 ## What it is
 
@@ -42,14 +42,25 @@ The executor receives one already-authorized request (`rollback` of one Deployme
 ## Architecture
 
 ```
-browser
-  → Next.js console (apps/web)
-    → Go API (apps/api)
-      → service layer (policy)
-        → executor (simulated rollback only)
-        → PostgreSQL
-      → read-only Kubernetes client
-        → local cluster opspilot-dev
+                        ┌──────────────┐
+                        │   Next.js    │
+                        │   Console    │
+                        └──────┬───────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │ OpsPilot API │
+                        │      Go      │
+                        └──────┬───────┘
+                               │
+           ┌───────────────────┼───────────────────┐
+           │                   │                   │
+           ▼                   ▼                   ▼
+     PostgreSQL           Kubernetes          Prometheus
+                                                │
+demo-shop                                       │
+    ├── Metrics ────────────────────────────────┘
+    └── OTLP → OpenTelemetry Collector → Jaeger → OpsPilot
 ```
 
 Future collection and action path:
@@ -76,28 +87,31 @@ See [docs/architecture/overview.md](docs/architecture/overview.md).
 
 - PostgreSQL persistence for clusters, services, incidents, timeline events, approvals, executions, and the audit trail
 - Local Kubernetes cluster `opspilot-dev` (k3d) with namespaces `opspilot-system` and `demo-shop`
+- Instrumented demo-shop services (`storefront` → `checkout-api` → `payment-api`, plus orders and inventory) and a traffic generator
+- Prometheus, the OpenTelemetry Collector, and Jaeger in `opspilot-system`
 - Read-only discovery of Deployments, Pods, Services, and Events in `demo-shop`
-- Idempotent sync of those workloads into OpsPilot services, labeled `source: kubernetes`
-- `GET /health` and `GET /ready` (database and Kubernetes connectivity, no secrets)
+- Server-built Prometheus queries and Jaeger trace reads for discovered services
+- Rule `PAYMENT_API_RELIABILITY_DEGRADATION`, which opens one `INC-REAL-…` incident from live telemetry
+- A constrained Reliability Lab fault on `payment-api` only: 40% HTTP 500 and 500ms latency, 30/60/120 seconds, auto-expire at 5 minutes
+- A local 15-minute availability SLO for `payment-api` (target 99.9%)
+- `GET /health` and `GET /ready` (PostgreSQL, Kubernetes, Prometheus, collector, Jaeger)
 - Development-only `POST /api/v1/demo/reset`, which restores `INC-142` and does not delete cluster data
 
 ### Simulated
 
 - `production-01` incident telemetry, logs, traces, and the events embedded in `INC-142`
-- The probable cause and its confidence
-- The rollback executor and the health recovery that follows approval
-- Reliability Lab runs
+- The probable cause and its confidence on `INC-142`
+- The rollback executor and the health recovery that follows approval of `INC-142`
+- The original Reliability Lab scenarios that do not touch the cluster
 
 ### Planned
 
-- OpenTelemetry, Prometheus, and log/trace backends
-- A real incident engine and a read-only investigator
-- A policy engine with risk classes beyond the single allow rule
 - A constrained Kubernetes remediation, still behind approval, for one named rollback
-- Verification against live SLOs, then a learning loop
+- Verification of that rollback against live telemetry
+- A learning loop
 - GitOps and AWS/EKS
 
-AWS, Terraform, Prometheus, Grafana, Argo, and an AI provider are intentionally not integrated. The Kubernetes client cannot create, update, delete, or exec.
+AWS, Terraform, Grafana, Loki, Argo, and an AI provider are intentionally not integrated. The Kubernetes reader cannot create, update, delete, or exec. Detected incidents cannot call the rollback executor.
 
 ## Current MVP
 
@@ -128,13 +142,14 @@ PostgreSQL:
 docker compose -f infra/docker-compose.yml up -d postgres
 ```
 
-Local cluster and demo workloads:
+Local cluster, demo workloads, and observability:
 
 ```bash
+docker build -t opspilot-demo:0.3.0 apps/demo
 infra/scripts/up-dev-cluster.sh
 ```
 
-The script creates `opspilot-dev` if needed and points kubeconfig at the node IP when the k3d load balancer cannot reach the API server.
+The script creates `opspilot-dev` if needed, points kubeconfig at the node IP when the k3d load balancer cannot reach the API server, imports local images, and applies `demo-shop` plus Prometheus, the collector, and Jaeger. In-cluster image pulls often time out in this environment, so images are imported with `ctr`.
 
 Terminal one:
 
@@ -183,20 +198,19 @@ From the local simulated MVP.
 ```
 apps/web     Next.js console
 apps/api     Go control plane
+apps/demo    Instrumented demo-shop services
 docs         Architecture and ADRs
 demo         Walkthrough for INC-142
-infra        Optional container build
+infra        Cluster, Prometheus, collector, Jaeger
 platform     Executor boundary notes
-runbooks     payment-api rollback
+runbooks     payment-api rollback and reliability degradation
 ```
 
 ## Roadmap
 
-1. Ingest OpenTelemetry spans and Prometheus series for `demo-shop`, still read-only.
-2. Replace the seeded analysis with a read-only investigator that can only emit a proposal.
-3. Add a policy check with explicit deny reasons, still in front of a simulated executor.
-4. Implement one Kubernetes action: roll back a single Deployment to a previous ReplicaSet, only after approval, then verify health.
-5. Keep the investigator off the mutating client.
+1. Implement one Kubernetes action: roll back a single Deployment to a previous ReplicaSet, only after approval, then verify it with Prometheus.
+2. Keep the investigator off the mutating client. Stopping a Reliability Lab fault is not that rollback.
+3. Add a policy check with explicit deny reasons in front of that one action.
 
 ## Decisions
 
@@ -206,3 +220,7 @@ runbooks     payment-api rollback
 - [0004 — PostgreSQL persistence](docs/adr/0004-postgresql-persistence.md)
 - [0005 — Read-only Kubernetes](docs/adr/0005-kubernetes-readonly.md)
 - [0006 — Data provenance](docs/adr/0006-data-provenance.md)
+- [0007 — OpenTelemetry architecture](docs/adr/0007-opentelemetry-architecture.md)
+- [0008 — Prometheus query boundary](docs/adr/0008-prometheus-query-boundary.md)
+- [0009 — Controlled failure injection](docs/adr/0009-controlled-failure-injection.md)
+- [0010 — Deterministic incident detection](docs/adr/0010-deterministic-incident-detection.md)

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { ErrorBlock, LoadingBlock, PageHeader, Panel } from "@/components/states";
 import { ServiceTable } from "@/components/service-table";
 import { StatusBadge } from "@/components/status-badge";
-import { formatAgo, formatDuration, formatPercent } from "@/lib/format";
+import { formatAgo, formatDuration, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { Cluster, Incident, KubernetesStatus, Service, Workload } from "@/lib/types";
+import type { Cluster, Incident, KubernetesStatus, Service, TelemetrySnapshot, TelemetryStatus, Workload } from "@/lib/types";
 
 export function OverviewDashboard() {
   const clusters = useApi<Cluster[]>("/api/v1/clusters", 4000);
@@ -14,6 +14,8 @@ export function OverviewDashboard() {
   const incidents = useApi<Incident[]>("/api/v1/incidents", 4000);
   const kubernetes = useApi<KubernetesStatus>("/api/v1/kubernetes/status", 4000);
   const workloads = useApi<Workload[]>("/api/v1/kubernetes/workloads", 4000);
+  const telemetry = useApi<TelemetryStatus>("/api/v1/telemetry/status", 5000);
+  const payment = useApi<TelemetrySnapshot>("/api/v1/services/k8s_demo-shop_payment-api/telemetry", 5000);
   const loading = (clusters.loading || services.loading || incidents.loading) && !clusters.data && !services.data;
   const error = clusters.error ?? services.error ?? incidents.error;
   const cluster = clusters.data?.find((item) => item.simulated) ?? clusters.data?.[0];
@@ -31,7 +33,7 @@ export function OverviewDashboard() {
       <PageHeader
         kicker={cluster.name}
         title="Overview"
-        description="The incident plane is simulated. Kubernetes workloads below are read from the local cluster and are not mixed into those reliability numbers."
+        description="Simulated production-01 stays separate from demo-shop. Kubernetes health and payment-api telemetry below come from the local cluster."
       />
       {active.length > 0 ? (
         <div className="mb-3 border border-red-400/40 bg-red-400/10">
@@ -45,6 +47,9 @@ export function OverviewDashboard() {
               <StatusBadge value={incident.severity} />
               <span className="font-medium">{incident.title}</span>
               <span className="text-muted-foreground">{incident.serviceName}</span>
+              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                {incident.origin === "detection-engine" ? "Detection Engine" : "Simulation"}
+              </span>
               <span className="ml-auto font-mono text-xs text-muted-foreground">{formatDuration(incident.durationSec * 1000)}</span>
             </Link>
           ))}
@@ -54,7 +59,7 @@ export function OverviewDashboard() {
           No active incidents. {cluster.name} is clear.
         </div>
       )}
-      <EnvironmentStrip status={kubernetes.data} />
+      <EnvironmentStrip status={kubernetes.data} telemetry={telemetry.data} payment={payment.data} />
       <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Stat label="Cluster health" value={health.state} hint={cluster.kubernetesVersion} emphasize={health.state} />
         <Stat label="Active incidents" value={String(health.activeIncidents)} hint={health.activeIncidents === 1 ? "SEV-2 open" : "Open right now"} />
@@ -109,18 +114,49 @@ export function OverviewDashboard() {
   );
 }
 
-function EnvironmentStrip({ status }: { status?: KubernetesStatus | null }) {
+function EnvironmentStrip({
+  status,
+  telemetry,
+  payment,
+}: {
+  status?: KubernetesStatus | null;
+  telemetry?: TelemetryStatus | null;
+  payment?: TelemetrySnapshot | null;
+}) {
   return (
-    <div className="mb-3 grid gap-2 border border-border bg-card px-3 py-2 text-sm sm:grid-cols-4">
-      <Field label="Environment" value="LOCAL" />
-      <Field label="Cluster" value={status?.cluster ?? "opspilot-dev"} />
-      <div>
-        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Kubernetes</div>
-        <div className="mt-1">
-          <StatusBadge value={status?.connectivity ?? "disconnected"} />
+    <div className="mb-3 space-y-2">
+      <div className="grid gap-2 border border-border bg-card px-3 py-2 text-sm sm:grid-cols-4">
+        <Field label="Environment" value="LOCAL" />
+        <Field label="Cluster" value={status?.cluster ?? "opspilot-dev"} />
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Kubernetes</div>
+          <div className="mt-1">
+            <StatusBadge value={status?.connectivity ?? "disconnected"} />
+          </div>
         </div>
+        <Field label="Namespace" value={status?.namespace ?? "demo-shop"} />
       </div>
-      <Field label="Namespace" value={status?.namespace ?? "demo-shop"} />
+      <div className="grid gap-2 border border-border bg-card px-3 py-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
+        <Connected label="Prometheus" value={telemetry?.prometheus} />
+        <Connected label="OpenTelemetry" value={telemetry?.opentelemetry} />
+        <Connected label="Trace backend" value={telemetry?.traces} />
+        <Field label="payment-api" value={paymentLine(payment)} />
+      </div>
+    </div>
+  );
+}
+
+function paymentLine(payment?: TelemetrySnapshot | null): string {
+  if (!payment?.available) return "Telemetry unavailable";
+  return `${payment.requestRate.toFixed(2)} req/s · ${formatPercent(payment.errorRate * 100)} errors · p95 ${formatLatency(payment.p95LatencyMs)}`;
+}
+
+function Connected({ label, value }: { label: string; value?: string }) {
+  const connected = value === "connected";
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`mt-1 text-sm ${connected ? "text-emerald-300" : "text-amber-200"}`}>{connected ? "Connected" : "Unavailable"}</div>
     </div>
   );
 }

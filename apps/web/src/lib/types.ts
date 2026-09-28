@@ -184,6 +184,9 @@ export interface Analysis {
   cause: string;
   confidence: number;
   evidence: string[];
+  likelyCause?: string;
+  supporting?: string[];
+  contradicting?: string[];
 }
 
 export interface Recommendation {
@@ -233,6 +236,13 @@ export interface Incident {
   remediation?: Remediation;
   snapshot: Snapshot;
   audit?: AuditRecord[];
+  origin?: string;
+  metricsSource?: string;
+  traceSource?: string;
+  kubernetesSource?: string;
+  ruleId?: string;
+  telemetryRecoveredAt?: string;
+  thresholds?: Record<string, string | number>;
 }
 
 export interface AuditRecord {
@@ -275,6 +285,7 @@ export interface ExperimentCatalog {
   notice: string;
   scenarios: Scenario[];
   runs: Experiment[];
+  realRuns?: Experiment[];
 }
 
 export interface Health {
@@ -288,6 +299,77 @@ export interface ReadyStatus {
   database: string;
   kubernetes: string;
   demoResetEnabled: boolean;
+  prometheus?: string;
+  opentelemetry?: string;
+  traces?: string;
+}
+
+export interface TelemetrySnapshot {
+  source: string;
+  available: boolean;
+  message?: string;
+  service: string;
+  namespace: string;
+  updated?: string;
+  requestRate: number;
+  errorRate: number;
+  requests: number;
+  p50LatencyMs: number;
+  p95LatencyMs: number;
+  p99LatencyMs: number;
+  availability: number;
+  dataSource: string;
+  slo?: {
+    target: number;
+    window: string;
+    label: string;
+    availability: number;
+    errorBudgetConsumed: number;
+    burnRate: number;
+    sufficient: boolean;
+    source: string;
+  };
+}
+
+export interface TraceSummary {
+  id: string;
+  start: string;
+  durationMs: number;
+  rootService: string;
+  status: string;
+  spans: number;
+}
+
+export interface SpanView {
+  service: string;
+  operation: string;
+  durationMs: number;
+  status: string;
+  depth: number;
+  attributes?: Record<string, string>;
+}
+
+export interface TraceDetail {
+  id: string;
+  start: string;
+  durationMs: number;
+  rootService: string;
+  status: string;
+  spans: number;
+  source: string;
+  tree: SpanView[];
+}
+
+export interface TraceList {
+  source: string;
+  message?: string;
+  traces: TraceSummary[];
+}
+
+export interface TelemetryStatus {
+  prometheus: string;
+  opentelemetry: string;
+  traces: string;
 }
 
 export interface KubernetesStatus {

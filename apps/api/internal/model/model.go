@@ -139,24 +139,31 @@ type MetricPoint struct {
 }
 
 type Incident struct {
-	ID             string          `json:"id"`
-	Severity       string          `json:"severity"`
-	ServiceID      string          `json:"serviceId"`
-	ServiceName    string          `json:"serviceName"`
-	Title          string          `json:"title"`
-	Status         string          `json:"status"`
-	StartedAt      time.Time       `json:"startedAt"`
-	ResolvedAt     *time.Time      `json:"resolvedAt,omitempty"`
-	DurationSec    int             `json:"durationSec"`
-	Summary        string          `json:"summary"`
-	Cluster        string          `json:"cluster"`
-	Timeline       []TimelineEvent `json:"timeline,omitempty"`
-	Evidence       *Evidence       `json:"evidence,omitempty"`
-	Analysis       *Analysis       `json:"analysis,omitempty"`
-	Recommendation *Recommendation `json:"recommendation,omitempty"`
-	Remediation    *Remediation    `json:"remediation,omitempty"`
-	Snapshot       Snapshot        `json:"snapshot"`
-	Audit          []AuditRecord   `json:"audit,omitempty"`
+	ID                   string          `json:"id"`
+	Severity             string          `json:"severity"`
+	ServiceID            string          `json:"serviceId"`
+	ServiceName          string          `json:"serviceName"`
+	Title                string          `json:"title"`
+	Status               string          `json:"status"`
+	StartedAt            time.Time       `json:"startedAt"`
+	ResolvedAt           *time.Time      `json:"resolvedAt,omitempty"`
+	DurationSec          int             `json:"durationSec"`
+	Summary              string          `json:"summary"`
+	Cluster              string          `json:"cluster"`
+	Timeline             []TimelineEvent `json:"timeline,omitempty"`
+	Evidence             *Evidence       `json:"evidence,omitempty"`
+	Analysis             *Analysis       `json:"analysis,omitempty"`
+	Recommendation       *Recommendation `json:"recommendation,omitempty"`
+	Remediation          *Remediation    `json:"remediation,omitempty"`
+	Snapshot             Snapshot        `json:"snapshot"`
+	Audit                []AuditRecord   `json:"audit,omitempty"`
+	Origin               string          `json:"origin,omitempty"`
+	MetricsSource        string          `json:"metricsSource,omitempty"`
+	TraceSource          string          `json:"traceSource,omitempty"`
+	KubernetesSource     string          `json:"kubernetesSource,omitempty"`
+	RuleID               string          `json:"ruleId,omitempty"`
+	TelemetryRecoveredAt *time.Time      `json:"telemetryRecoveredAt,omitempty"`
+	Thresholds           map[string]any  `json:"thresholds,omitempty"`
 }
 
 // AuditRecord is an append-only remediation action. It is not a Kubernetes event.
@@ -232,10 +239,13 @@ type KubeEvent struct {
 }
 
 type Analysis struct {
-	Simulated  bool     `json:"simulated"`
-	Cause      string   `json:"cause"`
-	Confidence float64  `json:"confidence"`
-	Evidence   []string `json:"evidence"`
+	Simulated     bool     `json:"simulated"`
+	Cause         string   `json:"cause"`
+	Confidence    float64  `json:"confidence"`
+	Evidence      []string `json:"evidence"`
+	LikelyCause   string   `json:"likelyCause,omitempty"`
+	Supporting    []string `json:"supporting,omitempty"`
+	Contradicting []string `json:"contradicting,omitempty"`
 }
 
 type Recommendation struct {
@@ -292,6 +302,7 @@ type ExperimentCatalog struct {
 	Notice    string       `json:"notice"`
 	Scenarios []Scenario   `json:"scenarios"`
 	Runs      []Experiment `json:"runs"`
+	RealRuns  []Experiment `json:"realRuns,omitempty"`
 }
 
 // KubernetesStatus is the control plane's view of a real cluster.

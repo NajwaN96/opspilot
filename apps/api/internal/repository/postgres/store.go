@@ -139,10 +139,17 @@ func (s *Store) ListIncidents(ctx context.Context) ([]model.Incident, error) {
 		}
 		items[i].Audit = audit
 	}
-	return items, nil
+	detected, err := s.listDetected(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(items, detected...), nil
 }
 
 func (s *Store) GetIncident(ctx context.Context, id string) (model.Incident, error) {
+	if strings.HasPrefix(id, "INC-REAL-") {
+		return s.getDetected(ctx, id)
+	}
 	item, err := s.mem.GetIncident(ctx, id)
 	if err != nil {
 		return model.Incident{}, err
@@ -176,7 +183,19 @@ func (s *Store) StartRemediation(ctx context.Context, incidentID string) (model.
 }
 
 func (s *Store) ListExperiments(ctx context.Context) (model.ExperimentCatalog, error) {
-	return s.mem.ListExperiments(ctx)
+	catalog, err := s.mem.ListExperiments(ctx)
+	if err != nil {
+		return model.ExperimentCatalog{}, err
+	}
+	real, err := s.ListExperimentsReal(ctx)
+	if err != nil {
+		return model.ExperimentCatalog{}, err
+	}
+	if real == nil {
+		real = []model.Experiment{}
+	}
+	catalog.RealRuns = real
+	return catalog, nil
 }
 
 func (s *Store) StartExperiment(ctx context.Context, serviceID, scenario string, durationSec int) (model.Experiment, error) {

@@ -5,19 +5,23 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/opspilot/opspilot/apps/api/internal/config"
+	"github.com/opspilot/opspilot/apps/api/internal/detection"
 	"github.com/opspilot/opspilot/apps/api/internal/executor"
+	"github.com/opspilot/opspilot/apps/api/internal/experiment"
 	"github.com/opspilot/opspilot/apps/api/internal/httpapi"
 	"github.com/opspilot/opspilot/apps/api/internal/kubernetes"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 	"github.com/opspilot/opspilot/apps/api/internal/repository/memory"
 	"github.com/opspilot/opspilot/apps/api/internal/repository/postgres"
 	"github.com/opspilot/opspilot/apps/api/internal/service"
+	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
 )
 
 func main() {
@@ -54,16 +58,43 @@ func main() {
 		logger.Info("postgres disabled, using in-memory state")
 	}
 
-	reader := openKubernetes(cfg, logger)
+	reader, kubeClient := openKubernetes(cfg, logger)
+	sources := telemetrySources(kubeClient)
 	svc := service.New(repo, executor.Simulated{Logger: logger})
 	svc.SetDemoResetEnabled(cfg.AllowDemoReset && (pg == nil || pg.DemoResetAllowed()))
-
+	if pg != nil && kubeClient != nil && cfg.AllowExperiments {
+		lab := &experiment.Controller{
+			Policy: experiment.Policy{Allow: true},
+			Token:  cfg.FaultToken,
+			Fault:  kubeClient,
+			Store:  pg,
+		}
+		svc.SetLab(lab)
+		go runEvery(ctx, 5*time.Second, func() {
+			if err := lab.Expire(ctx); err != nil {
+				logger.Error("experiment expire", "error", err)
+			}
+		})
+	}
 	if pg != nil {
 		go kubernetes.Run(ctx, cfg.SyncInterval, reader, pg, logger)
+		engine := &detection.Engine{
+			Metrics:     sources.Prometheus,
+			Traces:      sources.Jaeger,
+			Cluster:     reader,
+			Sink:        pg,
+			ClusterName: cfg.ClusterName,
+		}
+		go runEvery(ctx, detection.EvalInterval, func() {
+			if err := engine.Tick(ctx); err != nil {
+				logger.Error("detection", "error", err)
+			}
+		})
 	}
 
 	api := httpapi.New(svc, logger, cfg.Version)
 	api.Kubernetes = reader
+	api.Sources = sources
 	api.Ready = func(r *http.Request) map[string]any {
 		database := dbState
 		if pg != nil {
@@ -77,10 +108,14 @@ func main() {
 		if status, err := reader.Status(r.Context()); err == nil {
 			kubernetesState = status.Connectivity
 		}
+		telemetryState := sources.ComponentStatus(r.Context())
 		return map[string]any{
 			"database":         database,
 			"kubernetes":       kubernetesState,
 			"demoResetEnabled": cfg.AllowDemoReset && (pg == nil || pg.DemoResetAllowed()),
+			"prometheus":       telemetryState["prometheus"],
+			"opentelemetry":    telemetryState["opentelemetry"],
+			"traces":           telemetryState["traces"],
 		}
 	}
 	handler := httpapi.WithCORS(cfg.CORSOrigins, api.Handler())
@@ -109,7 +144,7 @@ func main() {
 	logger.Info("shutdown complete")
 }
 
-func openKubernetes(cfg config.Config, logger *slog.Logger) kubernetes.Reader {
+func openKubernetes(cfg config.Config, logger *slog.Logger) (kubernetes.Reader, *kubernetes.Client) {
 	reader, err := kubernetes.Load(kubernetes.Options{
 		Kubeconfig: cfg.Kubeconfig,
 		Cluster:    cfg.ClusterName,
@@ -122,10 +157,59 @@ func openKubernetes(cfg config.Config, logger *slog.Logger) kubernetes.Reader {
 			Namespace: first(cfg.Namespaces),
 			Scope:     cfg.Namespaces,
 			Message:   "Kubeconfig is not available",
-		}
+		}, nil
 	}
 	logger.Info("kubernetes client configured", "cluster", cfg.ClusterName, "namespaces", cfg.Namespaces)
-	return reader
+	client, _ := reader.(*kubernetes.Client)
+	return reader, client
+}
+
+func telemetrySources(client *kubernetes.Client) *telemetry.Sources {
+	if client == nil {
+		return &telemetry.Sources{}
+	}
+	return &telemetry.Sources{
+		Prometheus: telemetry.Prometheus{Get: proxyGetter{client: client, namespace: "opspilot-system", service: "prometheus", port: 9090}},
+		Jaeger:     telemetry.Jaeger{Get: proxyGetter{client: client, namespace: "opspilot-system", service: "jaeger", port: 16686}},
+		CollectorReady: func(ctx context.Context) error {
+			code, _, err := client.ReadProxy(ctx, "opspilot-system", "otel-collector", 13133, "/", nil)
+			if err != nil {
+				return err
+			}
+			if code != http.StatusOK {
+				return errStatus(code)
+			}
+			return nil
+		},
+	}
+}
+
+type proxyGetter struct {
+	client    *kubernetes.Client
+	namespace string
+	service   string
+	port      int
+}
+
+func (p proxyGetter) Get(ctx context.Context, path string, query url.Values) (int, []byte, error) {
+	return p.client.ReadProxy(ctx, p.namespace, p.service, p.port, path, query)
+}
+
+type errStatus int
+
+func (e errStatus) Error() string { return "unexpected status" }
+
+func runEvery(ctx context.Context, every time.Duration, fn func()) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			fn()
+		}
+	}
 }
 
 func first(items []string) string {

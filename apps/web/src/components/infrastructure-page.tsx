@@ -6,7 +6,7 @@ import { ErrorBlock, LoadingBlock, PageHeader, Panel } from "@/components/states
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatAgo } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { ClusterEvent, KubernetesStatus, Namespace, Workload, WorkloadPod } from "@/lib/types";
+import type { ClusterEvent, KubernetesStatus, Namespace, ReadyStatus, TelemetryStatus, Workload, WorkloadPod } from "@/lib/types";
 
 export function InfrastructurePage() {
   const status = useApi<KubernetesStatus>("/api/v1/kubernetes/status", 5000);
@@ -14,6 +14,8 @@ export function InfrastructurePage() {
   const workloads = useApi<Workload[]>("/api/v1/kubernetes/workloads", 5000);
   const pods = useApi<WorkloadPod[]>("/api/v1/kubernetes/pods", 5000);
   const events = useApi<ClusterEvent[]>("/api/v1/kubernetes/events", 5000);
+  const telemetry = useApi<TelemetryStatus>("/api/v1/telemetry/status", 5000);
+  const ready = useApi<ReadyStatus>("/ready", 5000);
 
   if (status.loading && !status.data) return <LoadingBlock label="Reading cluster" />;
   if (!status.data) return <ErrorBlock message={status.error ?? "Cluster status unavailable"} onRetry={() => void status.reload()} />;
@@ -38,6 +40,12 @@ export function InfrastructurePage() {
           </div>
         </div>
         <Fact label="Nodes ready" value={`${live.nodesReady}/${live.nodeCount}`} />
+      </div>
+      <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ComponentHealth name="PostgreSQL" value={ready.data?.database === "ok" ? "connected" : ready.data?.database} />
+        <ComponentHealth name="Prometheus" value={telemetry.data?.prometheus} />
+        <ComponentHealth name="OpenTelemetry" value={telemetry.data?.opentelemetry} />
+        <ComponentHealth name="Trace backend" value={telemetry.data?.traces} />
       </div>
       {disconnected ? (
         <div className="border border-border bg-card px-3 py-4 text-sm text-muted-foreground">
@@ -154,6 +162,16 @@ export function InfrastructurePage() {
         </div>
       )}
       {events.error ? <p className="mt-2 text-xs text-red-300">{events.error}</p> : null}
+    </div>
+  );
+}
+
+function ComponentHealth({ name, value }: { name: string; value?: string }) {
+  const connected = value === "connected" || value === "ok";
+  return (
+    <div className="border border-border bg-card px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{name}</div>
+      <div className={`mt-1 text-sm ${connected ? "text-emerald-300" : "text-amber-200"}`}>{connected ? "Connected" : "Unavailable"}</div>
     </div>
   );
 }

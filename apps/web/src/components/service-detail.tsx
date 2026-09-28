@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmptyBlock, ErrorBlock, LoadingBlock, PageHeader, Panel } from "@/components/states";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LiveReliability } from "@/components/live-telemetry";
 import { formatAgo, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { Incident, Service } from "@/lib/types";
@@ -98,9 +99,7 @@ export function ServiceDetail({ id }: { id: string }) {
         </TabsContent>
         <TabsContent value="reliability" className="mt-3">
           {fromKubernetes ? (
-            <Panel title="Reliability telemetry">
-              <p className="text-sm text-muted-foreground">Source: none. Prometheus and OpenTelemetry are not connected. This page does not invent an SLO for a discovered workload.</p>
-            </Panel>
+            <LiveReliability serviceId={svc.id} />
           ) : (
           <Panel title={`SLO · ${svc.slo.window} objective ${formatPercent(svc.slo.objective)}`}>
             <div className="mb-3 grid gap-3 sm:grid-cols-4">

@@ -3,18 +3,26 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/opspilot/opspilot/apps/api/internal/executor"
+	"github.com/opspilot/opspilot/apps/api/internal/experiment"
 	"github.com/opspilot/opspilot/apps/api/internal/model"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 )
 
 // Service is the control-plane use-case layer.
 // Policy runs here, before any executor is allowed to act.
+type realLab interface {
+	Start(ctx context.Context, serviceID, scenario string, durationSec int) (model.Experiment, error)
+	Stop(ctx context.Context, id string) (model.Experiment, error)
+}
+
 type Service struct {
 	repo           repository.Catalog
 	exec           executor.Executor
 	allowDemoReset bool
+	lab            realLab
 }
 
 func New(repo repository.Catalog, exec executor.Executor) *Service {
@@ -25,6 +33,11 @@ func New(repo repository.Catalog, exec executor.Executor) *Service {
 // Production processes leave this false.
 func (s *Service) SetDemoResetEnabled(enabled bool) {
 	s.allowDemoReset = enabled
+}
+
+// SetLab attaches the constrained local experiment controller.
+func (s *Service) SetLab(lab realLab) {
+	s.lab = lab
 }
 
 func (s *Service) ListClusters(ctx context.Context) ([]model.Cluster, error) {
@@ -54,6 +67,9 @@ func (s *Service) ListExperiments(ctx context.Context) (model.ExperimentCatalog,
 // StartRemediation authorizes a proposed action, then hands a narrow
 // request to the executor. The executor cannot choose a different action.
 func (s *Service) StartRemediation(ctx context.Context, incidentID, action string) (model.Remediation, error) {
+	if strings.HasPrefix(incidentID, "INC-REAL-") {
+		return model.Remediation{}, fmt.Errorf("%w: detected incidents cannot run a Kubernetes rollback", repository.ErrInvalid)
+	}
 	if action == "" {
 		return model.Remediation{}, fmt.Errorf("%w: action is required", repository.ErrInvalid)
 	}
@@ -85,7 +101,20 @@ func (s *Service) StartRemediation(ctx context.Context, incidentID, action strin
 	return s.repo.StartRemediation(ctx, incidentID)
 }
 
+func (s *Service) StopExperiment(ctx context.Context, id string) (model.Experiment, error) {
+	if s.lab == nil {
+		return model.Experiment{}, fmt.Errorf("%w: real experiments are not configured", repository.ErrForbidden)
+	}
+	return s.lab.Stop(ctx, id)
+}
+
 func (s *Service) StartExperiment(ctx context.Context, serviceID, scenario string, durationSec int) (model.Experiment, error) {
+	if scenario == experiment.ScenarioPaymentDegraded {
+		if s.lab == nil {
+			return model.Experiment{}, fmt.Errorf("%w: real experiments are disabled", repository.ErrForbidden)
+		}
+		return s.lab.Start(ctx, serviceID, scenario, durationSec)
+	}
 	if serviceID == "" || scenario == "" {
 		return model.Experiment{}, fmt.Errorf("%w: service and scenario are required", repository.ErrInvalid)
 	}

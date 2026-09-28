@@ -12,6 +12,7 @@ import (
 	"github.com/opspilot/opspilot/apps/api/internal/kubernetes"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 	"github.com/opspilot/opspilot/apps/api/internal/service"
+	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
 )
 
 type Server struct {
@@ -22,6 +23,8 @@ type Server struct {
 	Kubernetes kubernetes.Reader
 	// Ready reports dependencies. Nil means the process has no external dependencies.
 	Ready func(r *http.Request) map[string]any
+	// Sources reads local Prometheus and Jaeger. It does not accept browser PromQL.
+	Sources *telemetry.Sources
 }
 
 func New(svc *service.Service, logger *slog.Logger, version string) *Server {
@@ -38,11 +41,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/clusters", s.listClusters)
 	mux.HandleFunc("GET /api/v1/services", s.listServices)
 	mux.HandleFunc("GET /api/v1/services/{id}", s.getService)
+	mux.HandleFunc("GET /api/v1/services/{id}/telemetry", s.serviceTelemetry)
+	mux.HandleFunc("GET /api/v1/services/{id}/traces", s.serviceTraces)
+	mux.HandleFunc("GET /api/v1/traces/{id}", s.traceDetail)
+	mux.HandleFunc("GET /api/v1/telemetry/status", s.telemetryStatus)
 	mux.HandleFunc("GET /api/v1/incidents", s.listIncidents)
 	mux.HandleFunc("GET /api/v1/incidents/{id}", s.getIncident)
 	mux.HandleFunc("POST /api/v1/incidents/{id}/remediations", s.startRemediation)
 	mux.HandleFunc("GET /api/v1/experiments", s.listExperiments)
 	mux.HandleFunc("POST /api/v1/experiments", s.startExperiment)
+	mux.HandleFunc("POST /api/v1/experiments/{id}/stop", s.stopExperiment)
 	mux.HandleFunc("GET /api/v1/kubernetes/status", s.kubernetesStatus)
 	mux.HandleFunc("GET /api/v1/kubernetes/namespaces", s.kubernetesNamespaces)
 	mux.HandleFunc("GET /api/v1/kubernetes/workloads", s.kubernetesWorkloads)

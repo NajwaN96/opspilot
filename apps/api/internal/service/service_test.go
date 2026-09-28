@@ -71,3 +71,19 @@ func TestResetDemoClearsOnlyInMemoryRemediation(t *testing.T) {
 		t.Fatalf("status %s remediation %#v", incident.Status, incident.Remediation)
 	}
 }
+
+func TestRealIncidentCannotRollBack(t *testing.T) {
+	svc := testService(t)
+	_, err := svc.StartRemediation(context.Background(), "INC-REAL-abcdef12", "rollback")
+	if !errors.Is(err, repository.ErrInvalid) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestRealExperimentRequiresLab(t *testing.T) {
+	svc := testService(t)
+	_, err := svc.StartExperiment(context.Background(), "k8s_demo-shop_payment-api", "payment-api-degraded", 60)
+	if !errors.Is(err, repository.ErrForbidden) {
+		t.Fatalf("%v", err)
+	}
+}

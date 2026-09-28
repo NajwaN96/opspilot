@@ -1,22 +1,63 @@
 # Architecture
 
-OpsPilot is a reliability control plane. It sits beside a cluster, not inside it as a privileged controller. Incident analysis is still simulated. Persistence and Kubernetes discovery are real and local.
+OpsPilot is a reliability control plane. It sits beside a cluster, not inside it as a privileged controller. `INC-142` analysis and rollback stay simulated. demo-shop metrics, traces, detection, and the payment-api fault are real and local.
 
 ## Today
 
 ```
-┌────────────┐    HTTP     ┌────────────────────────────────────┐
-│ Next.js UI │ ──────────► │ Go API                             │
-│ apps/web   │  /api/v1    │  handlers                          │
-└────────────┘             │  service (policy)                  │
-                           │    ├─ executor (simulated rollback)│
-                           │    └─ PostgreSQL                   │
-                           │  kubernetes.Reader (list/get only) │
-                           └──────────────┬─────────────────────┘
-                                          │ read-only
-                                          ▼
-                               k3d cluster opspilot-dev
-                               namespace demo-shop
+                        ┌──────────────┐
+                        │   Next.js    │
+                        │   Console    │
+                        └──────┬───────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │ OpsPilot API │
+                        │      Go      │
+                        └──────┬───────┘
+                               │
+           ┌───────────────────┼───────────────────┐
+           │                   │                   │
+           ▼                   ▼                   ▼
+     PostgreSQL           Kubernetes          Prometheus
+                                                │
+                                                │
+demo-shop                                       │
+    │                                           │
+    ├── Metrics ────────────────────────────────┘
+    │
+    └── OTLP
+         │
+         ▼
+ OpenTelemetry Collector
+         │
+         ▼
+    Jaeger
+         │
+         └──────────────→ OpsPilot
+
+Reliability Lab
+      │
+      ▼
+Constrained Experiment Controller
+      │
+      ▼
+payment-api degraded mode
+      │
+      ▼
+Real telemetry degradation
+      │
+      ▼
+Detection Engine
+      │
+      ▼
+Real Incident
+      │
+      ▼
+Evidence Correlation
+      │
+      ▼
+Rule-Based Diagnosis
 ```
 
 The browser talks only to the Next.js server. That server proxies `/api/*`, `/health`, and `/ready` to the Go process. PostgreSQL is the system of record for approvals and discovered workloads. The simulated clock still renders `INC-142` telemetry, rehydrated from `demo_state` after a restart.
@@ -31,7 +72,10 @@ Package boundaries in `apps/api`:
 | `internal/repository` | `Catalog` interface |
 | `internal/repository/memory` | Seeded `production-01` world and the remediation clock |
 | `internal/repository/postgres` | Migrations, durable approvals, audit, Kubernetes observations |
-| `internal/kubernetes` | Read-only client, mapping, sync. No mutate methods |
+| `internal/kubernetes` | Read-only client, mapping, sync, and a tiny allow-listed service proxy. No mutate methods |
+| `internal/telemetry` | Prometheus and Jaeger readers. PromQL is built in this package |
+| `internal/detection` | Thresholds, deduplication streaks, diagnosis, and the local SLO |
+| `internal/experiment` | Allow-listed payment-api fault. It does not roll back a Deployment |
 | `internal/model` | Shared response types, including source and telemetry |
 | `internal/config` | Address, database URL, environment, namespaces, sync interval |
 
@@ -80,9 +124,9 @@ The MVP already follows that split for one case. `POST /api/v1/incidents/INC-142
 
 - No cloud provider SDK and no EKS
 - No mutating Kubernetes client and no kubectl endpoint
-- No Prometheus, Loki, Tempo, or collector
+- No Loki, Tempo, or Grafana
 - No model API key
 - No Terraform or Argo CD
-- No persisted audit log yet (the approval exists only in process memory)
+- No browser-supplied PromQL, shell command, or experiment namespace
 
 Those are later adapters. They attach at intake, policy, or the executor. They should not be threaded through the React views.

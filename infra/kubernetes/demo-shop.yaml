@@ -12,6 +12,17 @@ metadata:
   labels:
     app.kubernetes.io/part-of: demo-shop
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: payment-fault
+  namespace: demo-shop
+  labels:
+    app.kubernetes.io/part-of: demo-shop
+type: Opaque
+stringData:
+  token: opspilot-local-fault
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -39,30 +50,41 @@ spec:
     spec:
       containers:
         - name: storefront
-          image: nginx:1.27-alpine
+          image: opspilot-demo:0.3.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
+          env:
+            - name: SERVICE_NAME
+              value: storefront
+            - name: SERVICE_VERSION
+              value: "1.6.0"
+            - name: NAMESPACE
+              value: demo-shop
+            - name: CHECKOUT_URL
+              value: http://checkout-api/checkout
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.opspilot-system.svc:4318
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 2
+            initialDelaySeconds: 1
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 3
             periodSeconds: 10
           resources:
             requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              cpu: 50m
+              cpu: 20m
               memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
@@ -71,8 +93,6 @@ metadata:
   namespace: demo-shop
   labels:
     app.kubernetes.io/name: storefront
-    app.kubernetes.io/part-of: demo-shop
-    opspilot.io/service: storefront
 spec:
   selector:
     app.kubernetes.io/name: storefront
@@ -108,40 +128,49 @@ spec:
     spec:
       containers:
         - name: checkout-api
-          image: nginx:1.27-alpine
+          image: opspilot-demo:0.3.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
+          env:
+            - name: SERVICE_NAME
+              value: checkout-api
+            - name: SERVICE_VERSION
+              value: "2.3.1"
+            - name: NAMESPACE
+              value: demo-shop
+            - name: PAYMENT_URL
+              value: http://payment-api/pay
+            - name: ORDERS_URL
+              value: http://orders-api/orders
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.opspilot-system.svc:4318
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 2
+            initialDelaySeconds: 1
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 3
             periodSeconds: 10
           resources:
             requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              cpu: 50m
+              cpu: 20m
               memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: checkout-api
   namespace: demo-shop
-  labels:
-    app.kubernetes.io/name: checkout-api
-    app.kubernetes.io/part-of: demo-shop
-    opspilot.io/service: checkout-api
 spec:
   selector:
     app.kubernetes.io/name: checkout-api
@@ -177,40 +206,50 @@ spec:
     spec:
       containers:
         - name: payment-api
-          image: nginx:1.27-alpine
+          image: opspilot-demo:0.3.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
+          env:
+            - name: SERVICE_NAME
+              value: payment-api
+            - name: SERVICE_VERSION
+              value: "1.4.2"
+            - name: NAMESPACE
+              value: demo-shop
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.opspilot-system.svc:4318
+            - name: FAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: payment-fault
+                  key: token
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 2
+            initialDelaySeconds: 1
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 3
             periodSeconds: 10
           resources:
             requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              cpu: 50m
+              cpu: 20m
               memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: payment-api
   namespace: demo-shop
-  labels:
-    app.kubernetes.io/name: payment-api
-    app.kubernetes.io/part-of: demo-shop
-    opspilot.io/service: payment-api
 spec:
   selector:
     app.kubernetes.io/name: payment-api
@@ -246,40 +285,47 @@ spec:
     spec:
       containers:
         - name: orders-api
-          image: nginx:1.27-alpine
+          image: opspilot-demo:0.3.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
+          env:
+            - name: SERVICE_NAME
+              value: orders-api
+            - name: SERVICE_VERSION
+              value: "1.9.0"
+            - name: NAMESPACE
+              value: demo-shop
+            - name: INVENTORY_URL
+              value: http://inventory-api/stock
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.opspilot-system.svc:4318
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 2
+            initialDelaySeconds: 1
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 3
             periodSeconds: 10
           resources:
             requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              cpu: 50m
+              cpu: 20m
               memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: orders-api
   namespace: demo-shop
-  labels:
-    app.kubernetes.io/name: orders-api
-    app.kubernetes.io/part-of: demo-shop
-    opspilot.io/service: orders-api
 spec:
   selector:
     app.kubernetes.io/name: orders-api
@@ -315,40 +361,45 @@ spec:
     spec:
       containers:
         - name: inventory-api
-          image: nginx:1.27-alpine
+          image: opspilot-demo:0.3.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
+          env:
+            - name: SERVICE_NAME
+              value: inventory-api
+            - name: SERVICE_VERSION
+              value: "1.2.4"
+            - name: NAMESPACE
+              value: demo-shop
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.opspilot-system.svc:4318
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 2
+            initialDelaySeconds: 1
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 3
             periodSeconds: 10
           resources:
             requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              cpu: 50m
+              cpu: 20m
               memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: inventory-api
   namespace: demo-shop
-  labels:
-    app.kubernetes.io/name: inventory-api
-    app.kubernetes.io/part-of: demo-shop
-    opspilot.io/service: inventory-api
 spec:
   selector:
     app.kubernetes.io/name: inventory-api
@@ -356,3 +407,43 @@ spec:
     - name: http
       port: 80
       targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic
+  namespace: demo-shop
+  labels:
+    app.kubernetes.io/name: traffic
+    app.kubernetes.io/part-of: demo-shop
+    opspilot.io/managed: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traffic
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: traffic
+        app.kubernetes.io/part-of: demo-shop
+        opspilot.io/managed: "true"
+    spec:
+      containers:
+        - name: traffic
+          image: opspilot-demo:0.3.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SERVICE_NAME
+              value: traffic
+            - name: TARGET_URL
+              value: http://storefront/buy
+            - name: INTERVAL
+              value: 200ms
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi

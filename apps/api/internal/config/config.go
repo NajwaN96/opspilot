@@ -8,17 +8,19 @@ import (
 )
 
 type Config struct {
-	Addr           string
-	CORSOrigins    []string
-	Step           time.Duration
-	Version        string
-	DatabaseURL    string
-	Env            string
-	Kubeconfig     string
-	ClusterName    string
-	Namespaces     []string
-	SyncInterval   time.Duration
-	AllowDemoReset bool
+	Addr             string
+	CORSOrigins      []string
+	Step             time.Duration
+	Version          string
+	DatabaseURL      string
+	Env              string
+	Kubeconfig       string
+	ClusterName      string
+	Namespaces       []string
+	SyncInterval     time.Duration
+	AllowDemoReset   bool
+	AllowExperiments bool
+	FaultToken       string
 }
 
 func Load() Config {
@@ -54,18 +56,24 @@ func Load() Config {
 			syncEvery = parsed
 		}
 	}
+	token := os.Getenv("OPSPILOT_FAULT_TOKEN")
+	if token == "" && env != "production" {
+		token = "opspilot-local-fault"
+	}
 	return Config{
-		Addr:           addr,
-		CORSOrigins:    origins,
-		Step:           time.Duration(stepMS) * time.Millisecond,
-		Version:        "0.2.0",
-		DatabaseURL:    os.Getenv("OPSPILOT_DATABASE_URL"),
-		Env:            env,
-		Kubeconfig:     os.Getenv("OPSPILOT_KUBECONFIG"),
-		ClusterName:    cluster,
-		Namespaces:     namespaces,
-		SyncInterval:   syncEvery,
-		AllowDemoReset: env != "production",
+		Addr:             addr,
+		CORSOrigins:      origins,
+		Step:             time.Duration(stepMS) * time.Millisecond,
+		Version:          "0.3.0",
+		DatabaseURL:      os.Getenv("OPSPILOT_DATABASE_URL"),
+		Env:              env,
+		Kubeconfig:       os.Getenv("OPSPILOT_KUBECONFIG"),
+		ClusterName:      cluster,
+		Namespaces:       namespaces,
+		SyncInterval:     syncEvery,
+		AllowDemoReset:   env != "production",
+		AllowExperiments: env != "production",
+		FaultToken:       token,
 	}
 }
 

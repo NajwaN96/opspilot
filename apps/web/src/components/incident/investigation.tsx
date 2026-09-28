@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Check, Circle } from "lucide-react";
 import { EvidencePanel } from "@/components/incident/evidence";
+import { RealInvestigation } from "@/components/incident/real-investigation";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorBlock, LoadingBlock, Panel } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,9 @@ export function Investigation({ id }: { id: string }) {
   }
 
   const incident = incidentQuery.data;
+  if (incident.origin === "detection-engine") {
+    return <RealInvestigation incident={incident} onReload={() => incidentQuery.reload()} />;
+  }
   const done = completedSteps(incident.remediation?.steps);
   const total = incident.remediation?.steps.length ?? 5;
 
