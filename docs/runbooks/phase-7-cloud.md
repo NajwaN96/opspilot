@@ -2,6 +2,18 @@
 
 Local k3d does not use this runbook. `infra/scripts/up-dev-cluster.sh` still builds `opspilot-dev`.
 
+## Zero-cost stop
+
+The default portfolio path does not apply this stack. Amazon EKS, the managed node, public IPv4, and ECR can charge the account. Official EKS pricing is $0.10 per cluster-hour on standard support. This environment could not read the account plan or credit balance, so those prices are not assumed to be covered.
+
+```bash
+infra/scripts/cost-classify
+```
+
+That command exits non-zero while the billable resources remain. `cloud-apply`, `ecr-build-push`, and `argocd-bootstrap` call the same check and refuse before AWS. `OPSPILOT_CLOUD_APPROVED=yes` does not bypass it. `OPSPILOT_PAID_CLOUD_OVERRIDE` is not set and must not be set for a $0 demonstration.
+
+The steps below describe the paid path only. Do not run them for the portfolio demo. The live demo is local k3d plus `gitops/overlays/local`.
+
 ```mermaid
 flowchart LR
   git[Git desired state] --> ci[CI fmt validate render]

@@ -61,5 +61,9 @@ jobs:
       - name: guardrails, gitops, and secret scan
         run: |
           bash infra/scripts/guard_test.sh
+          if bash infra/scripts/cost-classify; then
+            echo "cost-classify must refuse the current billable stack" >&2
+            exit 1
+          fi
           bash infra/scripts/gitops_render_test.sh
           bash infra/scripts/security_scan.sh

@@ -14,7 +14,7 @@ OpenTofu 1.12.6 is the implementation. The root module is `infra/terraform/envir
 
 A later remote backend can be an S3 bucket and a DynamoDB lock table created by a separate bootstrap, then selected with `tofu init -migrate-state`. That bootstrap is not part of this stack, so applying the cluster does not depend on a bucket that the same stack would have to create first.
 
-`cloud-plan` runs fmt, init, validate, and plan. `cloud-apply` applies only an existing plan file after the account, region, environment, and `OPSPILOT_CLOUD_APPROVED=yes` checks.
+`cloud-plan` runs fmt, init, validate, and plan. `cloud-apply` applies only an existing plan file after the account, region, environment, and `OPSPILOT_CLOUD_APPROVED=yes` checks. While the modules contain EKS, nodes, public IPv4, or ECR, `cloud-apply` also refuses unless `OPSPILOT_PAID_CLOUD_OVERRIDE=yes`. That override is not set in this repository. See ADR 0027.
 
 ## Consequences
 

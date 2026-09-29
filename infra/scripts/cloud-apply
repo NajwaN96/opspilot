@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Apply a previously written dev plan. Refuses to run without explicit approval.
+# Apply a previously written dev plan.
+# Zero-cost mode refuses while the stack contains billable resources.
+# Approval alone is not enough, and the paid override is not enabled here.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/cost.sh
+source "$ROOT/infra/scripts/lib/cost.sh"
+guard_require_zero_cost "$ROOT"
+
 # shellcheck source=lib/preflight.sh
 source "$ROOT/infra/scripts/lib/preflight.sh"
 cloud_preflight apply

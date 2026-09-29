@@ -12,6 +12,10 @@ Node size, min, desired, and max are variables. The maximum is 3, and the instan
 
 `cloud-destroy` requires `OPSPILOT_CLOUD_APPROVED=yes` and `OPSPILOT_CLOUD_DESTROY=yes`. It deletes only load balancers tagged `Project=OpsPilot` and `Environment=dev`, then runs `tofu destroy` for this state. It does not delete unrelated account resources. ECR repositories are created with `force_delete` so images do not block the repository.
 
+## Execution policy
+
+This footprint is portfolio Infrastructure-as-Code. It is not the default deployment. Amazon EKS has a published hourly control-plane price and is not an always-free service. The managed node, its EBS volume, and `map_public_ip_on_launch` can also bill. `infra/scripts/cost-classify` fails closed on that surface, and `cloud-apply`, `ecr-build-push`, and `argocd-bootstrap` call the same check before any AWS or registry call. `OPSPILOT_PAID_CLOUD_OVERRIDE` is a separate explicit switch and is not enabled.
+
 ## Consequences
 
-The standing cost is the EKS control plane, the node, the node volume, and the public IPv4 address. Destroy is part of the design and is not run automatically after a successful demo.
+If the paid override were ever set, the standing cost would be the EKS control plane, the node, the node volume, and the public IPv4 address. Destroy remains part of the design. `cloud-destroy` is still guarded by the account, region, and destroy flags so an accidental stack can be removed. It is not run automatically.

@@ -4,7 +4,7 @@ Kubernetes reliability control plane.
 
 Production incidents are still reconstructed by hand: a deploy lands, latency moves, someone pastes logs into a channel, and a rollback waits on a person who has standing cluster-admin access. OpsPilot is the control plane for that loop. It is meant to detect a change, correlate it with telemetry, explain the likely cause, propose one constrained action, require a human when the policy says so, execute only that action, and verify recovery.
 
-This repository is a local control plane plus a guarded AWS dev path. PostgreSQL stores operational state, a read-only client discovers workloads on a local Kubernetes cluster, and demo-shop emits real Prometheus metrics and OpenTelemetry traces. A deterministic rule can open an incident from that telemetry. An evidence snapshot can be sent to a configured OpenAI investigator, which may recommend a semantic action and cannot execute it. `INC-142` still uses a simulated rollback. A detected incident can approve one real rollback: `demo-shop/payment-api` from `1.5.0-bad` to `1.4.2`, and only on the local cluster `opspilot-dev`. The AWS stack in `infra/terraform` is not applied by local development. `cloud-apply` refuses to run until the account, region, and an explicit approval flag match.
+This repository is a local control plane plus plan-only AWS Infrastructure-as-Code. PostgreSQL stores operational state, a read-only client discovers workloads on a local Kubernetes cluster, and demo-shop emits real Prometheus metrics and OpenTelemetry traces. A deterministic rule can open an incident from that telemetry. An evidence snapshot can be sent to a configured OpenAI investigator, which may recommend a semantic action and cannot execute it. `INC-142` still uses a simulated rollback. A detected incident can approve one real rollback: `demo-shop/payment-api` from `1.5.0-bad` to `1.4.2`, and only on the local cluster `opspilot-dev`. The AWS stack in `infra/terraform` is not applied by local development. `cloud-apply` refuses while that stack can create a charge, and it still requires the account, region, and an explicit approval flag before any later paid run.
 
 ## What it is
 
@@ -185,14 +185,14 @@ The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxie
 
 ## Cloud dev path
 
-OpenTofu under `infra/terraform/environments/dev` describes a small EKS cluster named `opspilot-aws-dev`: a VPC with public subnets and no NAT gateway, one managed node group, and an ECR repository for `opspilot-demo`. GitOps lives in `gitops/`. Argo CD is installed only by `infra/scripts/argocd-bootstrap` after approval. The runbook is [docs/runbooks/phase-7-cloud.md](docs/runbooks/phase-7-cloud.md).
+OpenTofu under `infra/terraform/environments/dev` describes a small EKS cluster named `opspilot-aws-dev`: a VPC with public subnets and no NAT gateway, one managed node group, and an ECR repository for `opspilot-demo`. That description stays plan-only. EKS is $0.10 per cluster-hour on standard support, and the node, volume, and public IPv4 addresses are also billable, so the portfolio demo does not apply it. GitOps for the local cluster is `gitops/overlays/local`. The Argo CD application is validated Infrastructure-as-Code and is not installed. The decision is [ADR 0027](docs/adr/0027-zero-cost-portfolio-path.md). The runbook is [docs/runbooks/phase-7-cloud.md](docs/runbooks/phase-7-cloud.md).
 
 ```bash
+infra/scripts/cost-classify
 infra/scripts/cloud-doctor
-infra/scripts/cloud-plan
 ```
 
-`cloud-plan` does not create resources. `cloud-apply` and `cloud-destroy` require `OPSPILOT_CLOUD_APPROVED=yes`, and destroy also requires `OPSPILOT_CLOUD_DESTROY=yes`. The investigator has no AWS client. The constrained executor still accepts only `opspilot-dev`.
+`cost-classify` refuses this stack and does not call AWS. `cloud-plan` does not create resources. `cloud-apply`, `ecr-build-push`, and `argocd-bootstrap` refuse while billable resources are present, even with `OPSPILOT_CLOUD_APPROVED=yes`. The paid override is not enabled. `cloud-destroy` still requires `OPSPILOT_CLOUD_APPROVED=yes` and `OPSPILOT_CLOUD_DESTROY=yes`. The investigator has no AWS client. The constrained executor still accepts only `opspilot-dev`. A public Next.js host such as Vercel can sit in front of the console later; it is not part of this deployment, and Kubernetes stays on local k3d.
 
 Useful environment variables are listed in [.env.example](.env.example). None are required for the defaults above.
 

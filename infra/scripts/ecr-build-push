@@ -4,6 +4,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/cost.sh
+source "$ROOT/infra/scripts/lib/cost.sh"
+guard_require_zero_cost "$ROOT"
+
 # shellcheck source=lib/preflight.sh
 source "$ROOT/infra/scripts/lib/preflight.sh"
 cloud_preflight apply

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Print the billable Terraform surface. Does not call AWS and does not apply.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/cost.sh
+source "$ROOT/infra/scripts/lib/cost.sh"
+
+echo "zero-cost classifier"
+echo "paid override: ${OPSPILOT_PAID_CLOUD_OVERRIDE:-unset}"
+hits="$(cost_scan_dir "$ROOT/infra/terraform")"
+if [[ -z "$hits" ]]; then
+  echo "result: no known billable resources"
+  exit 0
+fi
+echo "billable surface:"
+echo "$hits"
+if [[ "${OPSPILOT_PAID_CLOUD_OVERRIDE:-}" == "yes" ]]; then
+  echo "result: override is set in this shell. Apply scripts would allow these resources."
+  echo "result: this command still does not apply."
+  exit 0
+fi
+echo "result: REFUSE apply. Keep this stack as validated Infrastructure-as-Code."
+exit 1
