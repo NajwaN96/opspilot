@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 	"github.com/opspilot/opspilot/apps/api/internal/repository/memory"
 	"github.com/opspilot/opspilot/apps/api/internal/repository/postgres"
+	"github.com/opspilot/opspilot/apps/api/internal/rollout"
 	"github.com/opspilot/opspilot/apps/api/internal/service"
 	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
 	"github.com/opspilot/opspilot/apps/api/internal/verify"
@@ -116,8 +118,9 @@ func main() {
 	if pg != nil {
 		investigationStore = pg
 	}
+	provider := aiProvider(cfg, logger)
 	investigator := &investigate.Runner{
-		Provider: aiProvider(cfg, logger),
+		Provider: provider,
 		Reader: investigate.Reader{
 			Metrics: sources.Prometheus,
 			Traces:  sources.Jaeger,
@@ -127,6 +130,37 @@ func main() {
 		Logger: logger,
 	}
 	api.Investigator = investigator
+	api.AllowLab = cfg.AllowExperiments
+	var rolloutStore rollout.Store
+	if pg != nil {
+		rolloutStore = pg
+	}
+	canary := &rollout.Engine{
+		Cluster:  kubeClient,
+		Meter:    sources.Prometheus,
+		Store:    rolloutStore,
+		Token:    cfg.FaultToken,
+		Counters: rollout.NewCounters(),
+		Advisor:  canaryAdvisor{provider: provider},
+	}
+	if kubeClient != nil && pg != nil {
+		api.Rollouts = canary
+		svc.SetRolloutGuards(func(ctx context.Context) error {
+			active, err := canary.Active(ctx)
+			if err != nil {
+				return err
+			}
+			if active {
+				return errors.New("a payment-api canary is active")
+			}
+			return nil
+		}, canary.Reset)
+		go runEvery(ctx, 10*time.Second, func() {
+			if err := canary.Tick(ctx); err != nil {
+				logger.Error("canary", "error", err.Error())
+			}
+		})
+	}
 	if pg != nil {
 		go runEvery(ctx, 15*time.Second, func() {
 			if err := investigator.Tick(ctx); err != nil {
@@ -156,6 +190,8 @@ func main() {
 			"opentelemetry":    telemetryState["opentelemetry"],
 			"traces":           telemetryState["traces"],
 			"ai":               investigator.Status(r.Context()),
+			"alertmanager":     telemetryState["alertmanager"],
+			"grafana":          telemetryState["grafana"],
 		}
 	}
 	handler := httpapi.WithCORS(cfg.CORSOrigins, api.Handler())
@@ -182,6 +218,29 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("shutdown complete")
+}
+
+type canaryAdvisor struct {
+	provider investigate.Provider
+}
+
+func (a canaryAdvisor) Advise(ctx context.Context, snapshot investigate.Snapshot) (string, string, string, bool) {
+	if a.provider == nil || a.provider.Name() == "disabled" {
+		return "", "", "unavailable", false
+	}
+	output, _, err := a.provider.Investigate(ctx, snapshot)
+	if err != nil {
+		return "", "", err.Error(), false
+	}
+	raw, err := json.Marshal(output)
+	if err != nil {
+		return "", "", "invalid", false
+	}
+	checked, validation := investigate.Validate(snapshot, raw)
+	if !validation.Accepted {
+		return "", checked.Summary, "invalid", false
+	}
+	return checked.RecommendedAction.ActionType, checked.Summary, "completed", a.provider.Real() && a.provider.Name() == "openai"
 }
 
 func aiProvider(cfg config.Config, logger *slog.Logger) investigate.Provider {
@@ -229,6 +288,26 @@ func telemetrySources(client *kubernetes.Client) *telemetry.Sources {
 	return &telemetry.Sources{
 		Prometheus: telemetry.Prometheus{Get: proxyGetter{client: client, namespace: "opspilot-system", service: "prometheus", port: 9090}},
 		Jaeger:     telemetry.Jaeger{Get: proxyGetter{client: client, namespace: "opspilot-system", service: "jaeger", port: 16686}},
+		AlertmanagerReady: func(ctx context.Context) error {
+			code, _, err := client.ReadProxy(ctx, "opspilot-system", "alertmanager", 9093, "/-/ready", nil)
+			if err != nil {
+				return err
+			}
+			if code != http.StatusOK {
+				return errStatus(code)
+			}
+			return nil
+		},
+		GrafanaReady: func(ctx context.Context) error {
+			code, _, err := client.ReadProxy(ctx, "opspilot-system", "grafana", 3000, "/api/health", nil)
+			if err != nil {
+				return err
+			}
+			if code != http.StatusOK {
+				return errStatus(code)
+			}
+			return nil
+		},
 		CollectorReady: func(ctx context.Context) error {
 			code, _, err := client.ReadProxy(ctx, "opspilot-system", "otel-collector", 13133, "/", nil)
 			if err != nil {

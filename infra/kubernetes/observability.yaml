@@ -8,6 +8,12 @@ data:
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ["alertmanager:9093"]
+    rule_files:
+      - /etc/prometheus/alerts.yml
     scrape_configs:
       - job_name: prometheus
         static_configs:
@@ -19,10 +25,43 @@ data:
               - storefront.demo-shop.svc:80
               - checkout-api.demo-shop.svc:80
               - payment-api.demo-shop.svc:80
+              - payment-api-canary.demo-shop.svc:80
               - orders-api.demo-shop.svc:80
               - inventory-api.demo-shop.svc:80
             labels:
               namespace: demo-shop
+  alerts.yml: |
+    groups:
+      - name: payment-api
+        rules:
+          - alert: PaymentApiHighErrorRate
+            expr: sum(rate(http_requests_total{service="payment-api",status_code=~"5.."}[2m])) / sum(rate(http_requests_total{service="payment-api"}[2m])) > 0.05
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: payment-api error rate is above 5%
+          - alert: PaymentApiHighLatency
+            expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service="payment-api"}[2m]))) > 0.3
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: payment-api p95 latency is above 300ms
+          - alert: PaymentApiCanaryHighErrorRate
+            expr: sum(rate(http_requests_total{service="payment-api",release_role="canary",status_code=~"5.."}[2m])) / sum(rate(http_requests_total{service="payment-api",release_role="canary"}[2m])) > 0.05
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: payment-api canary error rate is above 5%
+          - alert: PaymentApiCanaryHighLatency
+            expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service="payment-api",release_role="canary"}[2m]))) > 0.3
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: payment-api canary p95 latency is above 300ms
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -42,6 +81,8 @@ spec:
       labels:
         app.kubernetes.io/name: prometheus
         app.kubernetes.io/part-of: opspilot
+      annotations:
+        opspilot.io/config: phase6
     spec:
       containers:
         - name: prometheus
@@ -265,3 +306,177 @@ spec:
     - name: otlp-grpc
       port: 4317
       targetPort: otlp-grpc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: opspilot-system
+data:
+  alertmanager.yml: |
+    route:
+      receiver: blackhole
+    receivers:
+      - name: blackhole
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: opspilot-system
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/part-of: opspilot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager
+        app.kubernetes.io/part-of: opspilot
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+          ports:
+            - name: http
+              containerPort: 9093
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: opspilot-system
+spec:
+  selector:
+    app.kubernetes.io/name: alertmanager
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  namespace: opspilot-system
+data:
+  datasource.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+  provider.yml: |
+    apiVersion: 1
+    providers:
+      - name: OpsPilot
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards
+  payment.json: |
+    {"title":"OpsPilot payment-api","uid":"opspilot-payment","schemaVersion":39,"timezone":"utc","refresh":"10s","panels":[{"type":"timeseries","title":"Request rate","gridPos":{"h":8,"w":12,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum by (version, release_role) (rate(http_requests_total{service=\"payment-api\"}[1m]))","legendFormat":"{{version}} {{release_role}}"}]},{"type":"timeseries","title":"Error rate","gridPos":{"h":8,"w":12,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"sum by (version, release_role) (rate(http_requests_total{service=\"payment-api\",status_code=~\"5..\"}[1m])) / sum by (version, release_role) (rate(http_requests_total{service=\"payment-api\"}[1m]))","legendFormat":"{{version}} {{release_role}}"}]},{"type":"timeseries","title":"p95 latency","gridPos":{"h":8,"w":24,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, version, release_role) (rate(http_request_duration_seconds_bucket{service=\"payment-api\"}[1m])))","legendFormat":"{{version}} {{release_role}}"}]}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: opspilot-system
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: opspilot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/part-of: opspilot
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.3.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Viewer
+            - name: GF_AUTH_DISABLE_LOGIN_FORM
+              value: "true"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasource.yml
+              subPath: datasource.yml
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/provider.yml
+              subPath: provider.yml
+            - name: provisioning
+              mountPath: /var/lib/grafana/dashboards/payment.json
+              subPath: payment.json
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 384Mi
+      volumes:
+        - name: provisioning
+          configMap:
+            name: grafana-provisioning
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: opspilot-system
+spec:
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

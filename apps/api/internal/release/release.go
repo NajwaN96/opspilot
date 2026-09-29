@@ -19,10 +19,46 @@ const (
 	BadVersion  = "1.5.0-bad"
 	GoodImage   = "opspilot-demo:1.4.2"
 	BadImage    = "opspilot-demo:1.5.0-bad"
+
+	CandidateGoodVersion = "1.5.0"
+	CandidateGoodImage   = "opspilot-demo:1.5.0"
+	CandidateBadVersion  = "1.6.0-bad"
+	CandidateBadImage    = "opspilot-demo:1.6.0-bad"
+	CanaryDeployment     = "payment-api-canary"
+	CanaryService        = "payment-api-canary"
+	RoutingConfigMap     = "payment-routing"
 )
 
 // ErrDenied is a policy or target rejection. It is not a cluster outage.
 var ErrDenied = errors.New("payment rollback denied")
+
+// Candidate reports whether the image and version are a canary release.
+// Promotion is allowed only for the healthy candidate. The bad candidate can only be removed.
+func Candidate(image, version string) bool {
+	switch {
+	case image == CandidateGoodImage && version == CandidateGoodVersion:
+		return true
+	case image == CandidateBadImage && version == CandidateBadVersion:
+		return true
+	default:
+		return false
+	}
+}
+
+// Promotable is the only candidate that may replace the stable payment-api Deployment.
+func Promotable(image, version string) bool {
+	return image == CandidateGoodImage && version == CandidateGoodVersion
+}
+
+// BaselineImage is a payment-api image this process is allowed to restore.
+func BaselineImage(image string) bool {
+	switch image {
+	case GoodImage, BadImage, CandidateGoodImage, CandidateBadImage:
+		return true
+	default:
+		return false
+	}
+}
 
 // Known reports whether the image and version are one of the two server-side releases.
 func Known(image, version string) bool {

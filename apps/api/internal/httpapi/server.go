@@ -8,12 +8,14 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/opspilot/opspilot/apps/api/internal/investigate"
 	"github.com/opspilot/opspilot/apps/api/internal/kubernetes"
 	"github.com/opspilot/opspilot/apps/api/internal/release"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
+	"github.com/opspilot/opspilot/apps/api/internal/rollout"
 	"github.com/opspilot/opspilot/apps/api/internal/service"
 	"github.com/opspilot/opspilot/apps/api/internal/telemetry"
 )
@@ -30,6 +32,9 @@ type Server struct {
 	Sources *telemetry.Sources
 	// Investigator reads prepared evidence. It cannot mutate Kubernetes.
 	Investigator *investigate.Runner
+	// Rollouts is the canary engine. It is not a generic Kubernetes client.
+	Rollouts *rollout.Engine
+	AllowLab bool
 }
 
 func New(svc *service.Service, logger *slog.Logger, version string) *Server {
@@ -56,6 +61,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/incidents/{id}/investigation", s.getInvestigation)
 	mux.HandleFunc("POST /api/v1/incidents/{id}/investigation", s.runInvestigation)
 	mux.HandleFunc("GET /api/v1/ai/status", s.aiStatus)
+	mux.HandleFunc("GET /api/v1/rollouts", s.listRollouts)
+	mux.HandleFunc("GET /api/v1/rollouts/{id}", s.getRollout)
+	mux.HandleFunc("POST /api/v1/rollouts/{id}/approve", s.approveRollout)
+	mux.HandleFunc("POST /api/v1/lab/payment-api/canary/good", s.startGoodCanary)
+	mux.HandleFunc("POST /api/v1/lab/payment-api/canary/bad", s.startBadCanary)
+	mux.HandleFunc("GET /metrics", s.rolloutMetrics)
 	mux.HandleFunc("GET /api/v1/experiments", s.listExperiments)
 	mux.HandleFunc("POST /api/v1/experiments", s.startExperiment)
 	mux.HandleFunc("POST /api/v1/experiments/{id}/stop", s.stopExperiment)
@@ -241,6 +252,109 @@ func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
 		body["status"] = s.Investigator.Status(r.Context())
 	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+func (s *Server) listRollouts(w http.ResponseWriter, r *http.Request) {
+	if s.Rollouts == nil {
+		writeJSON(w, http.StatusOK, []rollout.Rollout{})
+		return
+	}
+	items, err := s.Rollouts.List(r.Context())
+	if err != nil {
+		s.writeRolloutErr(w, err)
+		return
+	}
+	if items == nil {
+		items = []rollout.Rollout{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) getRollout(w http.ResponseWriter, r *http.Request) {
+	if s.Rollouts == nil {
+		writeAPIError(w, http.StatusNotFound, "not_found", "rollout not found")
+		return
+	}
+	view, err := s.Rollouts.View(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeRolloutErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (s *Server) approveRollout(w http.ResponseWriter, r *http.Request) {
+	if s.Rollouts == nil {
+		writeAPIError(w, http.StatusForbidden, "forbidden", "rollouts are not configured")
+		return
+	}
+	var body struct {
+		Action string `json:"action"`
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid", "this action does not accept parameters")
+		return
+	}
+	view, err := s.Rollouts.Approve(r.Context(), r.PathValue("id"), body.Action)
+	if err != nil {
+		s.writeRolloutErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, view)
+}
+
+func (s *Server) startGoodCanary(w http.ResponseWriter, r *http.Request) {
+	s.startCanary(w, r, "good")
+}
+
+func (s *Server) startBadCanary(w http.ResponseWriter, r *http.Request) {
+	s.startCanary(w, r, "bad")
+}
+
+func (s *Server) startCanary(w http.ResponseWriter, r *http.Request, kind string) {
+	if !s.AllowLab || s.Rollouts == nil {
+		writeAPIError(w, http.StatusForbidden, "forbidden", "canary experiments are disabled")
+		return
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var body struct{}
+	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeAPIError(w, http.StatusBadRequest, "invalid", "this action does not accept parameters")
+		return
+	}
+	view, err := s.Rollouts.Start(r.Context(), kind)
+	if err != nil {
+		s.writeRolloutErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, view)
+}
+
+func (s *Server) rolloutMetrics(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	if s.Rollouts == nil || s.Rollouts.Counters == nil {
+		_, _ = w.Write([]byte(""))
+		return
+	}
+	_, _ = w.Write([]byte(s.Rollouts.Counters.Render()))
+}
+
+func (s *Server) writeRolloutErr(w http.ResponseWriter, err error) {
+	text := err.Error()
+	switch {
+	case strings.Contains(text, "no rows") || strings.Contains(text, "missing"):
+		writeAPIError(w, http.StatusNotFound, "not_found", "rollout not found")
+	case strings.Contains(text, "already active"):
+		writeAPIError(w, http.StatusConflict, "conflict", text)
+	case strings.Contains(text, "must") || strings.Contains(text, "requires") || strings.Contains(text, "not ") || strings.Contains(text, "unknown") || strings.Contains(text, "does not"):
+		writeAPIError(w, http.StatusBadRequest, "invalid", text)
+	default:
+		s.logger.Error("rollout", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal", "internal error")
+	}
 }
 
 func (s *Server) deployBadPayment(w http.ResponseWriter, r *http.Request) {

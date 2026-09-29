@@ -3,18 +3,21 @@ package investigate
 import "time"
 
 const (
-	ActionNone          = "NO_ACTION"
-	ActionContinue      = "CONTINUE_INVESTIGATION"
-	ActionRollback      = "ROLLBACK_PAYMENT_API"
-	ActionStopLab       = "STOP_RELIABILITY_EXPERIMENT"
-	StatusNotRequested  = "not_requested"
-	StatusQueued        = "queued"
-	StatusCollecting    = "collecting_evidence"
-	StatusInvestigating = "investigating"
-	StatusValidating    = "validating"
-	StatusCompleted     = "completed"
-	StatusFailed        = "failed"
-	StatusInvalid       = "invalid_output"
+	ActionNone           = "NO_ACTION"
+	ActionContinue       = "CONTINUE_INVESTIGATION"
+	ActionRollback       = "ROLLBACK_PAYMENT_API"
+	ActionStopLab        = "STOP_RELIABILITY_EXPERIMENT"
+	ActionContinueCanary = "CONTINUE_CANARY"
+	ActionPromoteCanary  = "PROMOTE_PAYMENT_API_CANARY"
+	ActionAbortCanary    = "ABORT_PAYMENT_API_CANARY"
+	StatusNotRequested   = "not_requested"
+	StatusQueued         = "queued"
+	StatusCollecting     = "collecting_evidence"
+	StatusInvestigating  = "investigating"
+	StatusValidating     = "validating"
+	StatusCompleted      = "completed"
+	StatusFailed         = "failed"
+	StatusInvalid        = "invalid_output"
 )
 
 // Item is one bounded piece of evidence. The investigator may cite its ID and nothing else.
@@ -100,7 +103,7 @@ type View struct {
 
 func AllowedAction(action string) bool {
 	switch action {
-	case ActionNone, ActionContinue, ActionRollback, ActionStopLab:
+	case ActionNone, ActionContinue, ActionRollback, ActionStopLab, ActionContinueCanary, ActionPromoteCanary, ActionAbortCanary:
 		return true
 	default:
 		return false

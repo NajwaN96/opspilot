@@ -26,6 +26,31 @@ func TestBuildQueriesRejectsUnsafeNames(t *testing.T) {
 	}
 }
 
+func TestBuildVersionQueriesAllowlist(t *testing.T) {
+	requests, _, _, _, _, err := BuildVersionQueries("payment-api", "demo-shop", "1.5.0", "2m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(requests, `version="1.5.0"`) || !strings.Contains(requests, "[2m]") {
+		t.Fatal(requests)
+	}
+	if _, _, _, _, _, err := BuildVersionQueries("payment-api", "demo-shop", "1.6.0-bad", "2m"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, _, _, err := BuildVersionQueries("payment-api", "demo-shop", "9.9.9", "2m"); err == nil {
+		t.Fatal("expected unknown version rejection")
+	}
+	if _, _, _, _, _, err := BuildVersionQueries("payment-api", "demo-shop", `1.5.0",foo="`, "2m"); err == nil {
+		t.Fatal("expected injection rejection")
+	}
+	if _, _, _, _, _, err := BuildVersionQueries("payment-api", "demo-shop", "1.5.0", "30s"); err == nil {
+		t.Fatal("expected window rejection")
+	}
+	if _, _, _, _, _, err := BuildQueries("payment-api", "demo-shop", "2m"); err == nil {
+		t.Fatal("service windows stay on 1m and 15m")
+	}
+}
+
 func TestParseVector(t *testing.T) {
 	value, ok, err := ParseVector([]byte(`{"status":"success","data":{"resultType":"vector","result":[{"value":[1,"12.5"]}]}}`))
 	if err != nil || !ok || value != 12.5 {

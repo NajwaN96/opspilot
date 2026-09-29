@@ -76,29 +76,32 @@ func main() {
 }
 
 type app struct {
-	name      string
-	version   string
-	namespace string
-	token     string
-	client    *http.Client
-	requests  *prometheus.CounterVec
-	duration  *prometheus.HistogramVec
-	mu        sync.Mutex
-	fault     fault.State
+	name         string
+	version      string
+	role         string
+	namespace    string
+	token        string
+	client       *http.Client
+	requests     *prometheus.CounterVec
+	duration     *prometheus.HistogramVec
+	mu           sync.Mutex
+	fault        fault.State
+	canaryWeight int
 }
 
 func newApp(name string) *app {
-	labels := []string{"service", "namespace", "version", "route", "status_code"}
+	labels := []string{"service", "namespace", "version", "release_role", "route", "status_code"}
 	requests := prometheus.NewCounterVec(prometheus.CounterOpts{Name: "http_requests_total", Help: "HTTP requests."}, labels)
 	duration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_request_duration_seconds",
 		Help:    "HTTP request duration.",
 		Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2},
-	}, []string{"service", "namespace", "version", "route"})
+	}, []string{"service", "namespace", "version", "release_role", "route"})
 	prometheus.MustRegister(requests, duration)
 	return &app{
 		name:      name,
 		version:   env("SERVICE_VERSION", "0.0.0"),
+		role:      env("RELEASE_ROLE", "stable"),
 		namespace: env("NAMESPACE", "demo-shop"),
 		token:     os.Getenv("FAULT_TOKEN"),
 		client:    &http.Client{Timeout: 3 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
@@ -115,6 +118,7 @@ func (a *app) routes() http.Handler {
 	})
 	mux.Handle("GET /metrics", promhttp.Handler())
 	mux.HandleFunc("POST /internal/fault", a.setFault)
+	mux.HandleFunc("POST /internal/canary", a.setCanary)
 	mux.Handle("GET /buy", otelhttp.NewHandler(http.HandlerFunc(a.buy), "GET /buy"))
 	mux.Handle("GET /checkout", otelhttp.NewHandler(http.HandlerFunc(a.checkout), "GET /checkout"))
 	mux.Handle("GET /pay", otelhttp.NewHandler(http.HandlerFunc(a.pay), "GET /pay"))
@@ -144,7 +148,7 @@ func (a *app) buy(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) checkout(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	payStatus, err := a.call(r.Context(), env("PAYMENT_URL", "http://payment-api/pay"))
+	payStatus, err := a.call(r.Context(), a.paymentURL())
 	if err != nil {
 		a.finish(r, "/checkout", http.StatusBadGateway, start)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "payment unavailable"})
@@ -162,7 +166,12 @@ func (a *app) checkout(w http.ResponseWriter, r *http.Request) {
 func (a *app) pay(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx, span := otel.Tracer(a.name).Start(r.Context(), "db.query")
-	span.SetAttributes(attribute.String("db.system", "postgresql"), attribute.String("db.operation", "insert_payment"))
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "insert_payment"),
+		attribute.String("service.version", a.version),
+		attribute.String("release.role", a.role),
+	)
 	defer span.End()
 
 	a.mu.Lock()
@@ -177,6 +186,15 @@ func (a *app) pay(w http.ResponseWriter, r *http.Request) {
 		}
 		if percent < 30 {
 			percent = 30
+		}
+	}
+	if bakedFault == "canarybad" {
+		active = true
+		if latency < 450*time.Millisecond {
+			latency = 450 * time.Millisecond
+		}
+		if percent < 25 {
+			percent = 25
 		}
 	}
 
@@ -213,6 +231,49 @@ func (a *app) stock(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	a.finish(r, "/stock", http.StatusOK, start)
 	writeJSON(w, http.StatusOK, map[string]string{"service": a.name, "stock": "ok"})
+}
+
+func (a *app) paymentURL() string {
+	a.mu.Lock()
+	weight := a.canaryWeight
+	a.mu.Unlock()
+	if weight > 0 && percentDraw(weight) {
+		return env("PAYMENT_CANARY_URL", "http://payment-api-canary/pay")
+	}
+	return env("PAYMENT_URL", "http://payment-api/pay")
+}
+
+func (a *app) setCanary(w http.ResponseWriter, r *http.Request) {
+	if a.name != "checkout-api" {
+		http.Error(w, "canary weight is only available on checkout-api", http.StatusForbidden)
+		return
+	}
+	if a.token == "" || r.Header.Get("X-OpsPilot-Fault-Token") != a.token {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var body struct {
+		Weight int `json:"weight"`
+	}
+	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil || !allowedCanaryWeight(body.Weight) {
+		http.Error(w, "weight must be 0, 5, 25, 50, or 100", http.StatusBadRequest)
+		return
+	}
+	a.mu.Lock()
+	a.canaryWeight = body.Weight
+	a.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"weight": body.Weight})
+}
+
+func allowedCanaryWeight(weight int) bool {
+	switch weight {
+	case 0, 5, 25, 50, 100:
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *app) setFault(w http.ResponseWriter, r *http.Request) {
@@ -274,8 +335,8 @@ func (a *app) finish(r *http.Request, route string, status int, start time.Time)
 
 func (a *app) observe(route string, status int, elapsed time.Duration) {
 	code := strconv.Itoa(status)
-	a.requests.WithLabelValues(a.name, a.namespace, a.version, route, code).Inc()
-	a.duration.WithLabelValues(a.name, a.namespace, a.version, route).Observe(elapsed.Seconds())
+	a.requests.WithLabelValues(a.name, a.namespace, a.version, a.role, route, code).Inc()
+	a.duration.WithLabelValues(a.name, a.namespace, a.version, a.role, route).Observe(elapsed.Seconds())
 }
 
 func setupTracing(ctx context.Context, name string) (func(context.Context) error, error) {

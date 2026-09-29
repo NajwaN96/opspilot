@@ -142,6 +142,13 @@ spec:
               value: demo-shop
             - name: PAYMENT_URL
               value: http://payment-api/pay
+            - name: PAYMENT_CANARY_URL
+              value: http://payment-api-canary/pay
+            - name: FAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: payment-fault
+                  key: token
             - name: ORDERS_URL
               value: http://orders-api/orders
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -216,6 +223,8 @@ spec:
               value: payment-api
             - name: SERVICE_VERSION
               value: "1.4.2"
+            - name: RELEASE_ROLE
+              value: stable
             - name: NAMESPACE
               value: demo-shop
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -253,6 +262,91 @@ metadata:
 spec:
   selector:
     app.kubernetes.io/name: payment-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-routing
+  namespace: demo-shop
+data:
+  weight: "0"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-api-canary
+  namespace: demo-shop
+  labels:
+    app.kubernetes.io/name: payment-api-canary
+    app.kubernetes.io/part-of: demo-shop
+    app.kubernetes.io/version: "1.5.0"
+    opspilot.io/managed: "true"
+    opspilot.io/service: payment-api
+    opspilot.io/role: canary
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payment-api-canary
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payment-api-canary
+        app.kubernetes.io/part-of: demo-shop
+        app.kubernetes.io/version: "1.5.0"
+        opspilot.io/managed: "true"
+        opspilot.io/service: payment-api
+        opspilot.io/role: canary
+    spec:
+      containers:
+        - name: payment-api
+          image: opspilot-demo:1.5.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SERVICE_NAME
+              value: payment-api
+            - name: SERVICE_VERSION
+              value: "1.5.0"
+            - name: RELEASE_ROLE
+              value: canary
+            - name: NAMESPACE
+              value: demo-shop
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.opspilot-system.svc:4318
+            - name: FAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: payment-fault
+                  key: token
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-api-canary
+  namespace: demo-shop
+spec:
+  selector:
+    app.kubernetes.io/name: payment-api-canary
   ports:
     - name: http
       port: 80

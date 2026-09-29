@@ -62,6 +62,7 @@ export function ReliabilityLab() {
         title="Reliability Lab"
         description="Real experiments are limited to payment-api in demo-shop. The scenarios below that remain simulated do not change the cluster."
       />
+      <CanaryExperiments />
       <RealExperiment />
       <BadRelease />
       <h2 className="mb-2 mt-6 text-sm font-medium uppercase tracking-wide text-muted-foreground">Simulated</h2>
@@ -172,6 +173,44 @@ export function ReliabilityLab() {
         </Panel>
       </div>
     </div>
+  );
+}
+
+function CanaryExperiments() {
+  const [pending, setPending] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  async function start(kind: "good" | "bad") {
+    setPending(kind);
+    setActionError(null);
+    setMessage(null);
+    try {
+      const view = await apiPost<{ id: string; candidateVersion: string }>(`/api/v1/lab/payment-api/canary/${kind}`, {});
+      setMessage(`${view.id} is deploying candidate ${view.candidateVersion}. Watch it on Rollouts. This is a local experiment.`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Canary failed");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <Panel title="Canary experiments" className="mb-3">
+      <p className="text-sm text-muted-foreground">
+        These controls deploy a second payment-api beside stable 1.4.2 and shift 5%, then 25%, then 50% of checkout traffic. They do nothing when the API is in production mode. Promotion and abort still need a person.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button disabled={pending !== null} onClick={() => void start("good")}>
+          {pending === "good" ? "Starting…" : "Start healthy canary 1.5.0"}
+        </Button>
+        <Button variant="outline" disabled={pending !== null} onClick={() => void start("bad")}>
+          {pending === "bad" ? "Starting…" : "Start bad canary 1.6.0-bad"}
+        </Button>
+      </div>
+      {message ? <p className="mt-3 text-sm">{message}</p> : null}
+      {actionError ? <p className="mt-3 text-sm text-red-300">{actionError}</p> : null}
+    </Panel>
   );
 }
 

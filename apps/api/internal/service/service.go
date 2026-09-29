@@ -39,6 +39,8 @@ type Service struct {
 	payment        executor.PaymentRollback
 	releaser       executor.PaymentMutator
 	watcher        paymentWatcher
+	busy           func(context.Context) error
+	restore        func(context.Context) error
 }
 
 func New(repo repository.Catalog, exec executor.Executor) *Service {
@@ -63,6 +65,12 @@ func (s *Service) SetRolloutsEnabled(enabled bool) {
 
 // SetPaymentRollback attaches the constrained payment-api mutator.
 // The detection engine does not receive this value.
+// SetRolloutGuards keep a canary and a payment rollback from racing.
+func (s *Service) SetRolloutGuards(busy, restore func(context.Context) error) {
+	s.busy = busy
+	s.restore = restore
+}
+
 func (s *Service) SetPaymentRollback(mutator executor.PaymentMutator, watcher paymentWatcher) {
 	s.releaser = mutator
 	s.payment = executor.PaymentRollback{Mutator: mutator}
@@ -202,6 +210,11 @@ func (s *Service) startPaymentRollback(ctx context.Context, incidentID, action s
 	if incident.Recommendation.From != release.BadVersion || incident.Recommendation.To != release.GoodVersion {
 		return model.Remediation{}, fmt.Errorf("%w: policy denied this action", repository.ErrInvalid)
 	}
+	if s.busy != nil {
+		if err := s.busy(ctx); err != nil {
+			return model.Remediation{}, fmt.Errorf("%w: %s", repository.ErrConflict, err.Error())
+		}
+	}
 	ledger, ok := s.repo.(paymentLedger)
 	if !ok || s.payment.Mutator == nil {
 		return model.Remediation{}, fmt.Errorf("%w: payment rollback is not configured", repository.ErrForbidden)
@@ -254,6 +267,11 @@ func (s *Service) DeployBadPayment(ctx context.Context) error {
 	if !s.allowRollouts || s.releaser == nil {
 		return fmt.Errorf("%w: bad payment releases are disabled", repository.ErrForbidden)
 	}
+	if s.busy != nil {
+		if err := s.busy(ctx); err != nil {
+			return fmt.Errorf("%w: %s", repository.ErrConflict, err.Error())
+		}
+	}
 	if err := s.releaser.SetPaymentRelease(ctx, release.BadImage, release.BadVersion); err != nil {
 		if errors.Is(err, release.ErrDenied) {
 			return fmt.Errorf("%w: %s", repository.ErrInvalid, err.Error())
@@ -270,6 +288,11 @@ func (s *Service) DeployBadPayment(ctx context.Context) error {
 func (s *Service) ResetDemo(ctx context.Context) error {
 	if !s.allowDemoReset {
 		return fmt.Errorf("%w: demo reset is disabled outside local development", repository.ErrForbidden)
+	}
+	if s.restore != nil {
+		if err := s.restore(ctx); err != nil {
+			return err
+		}
 	}
 	return s.repo.ResetDemo(ctx)
 }

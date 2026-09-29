@@ -18,13 +18,19 @@ func proxyAllowed(namespace, service, method, path string) bool {
 	}
 	switch {
 	case namespace == "opspilot-system" && service == "prometheus" && method == http.MethodGet:
-		return path == "/api/v1/query" || path == "/-/ready" || path == "/-/healthy"
+		return path == "/api/v1/query" || path == "/-/ready" || path == "/-/healthy" || path == "/api/v1/rules"
 	case namespace == "opspilot-system" && service == "jaeger" && method == http.MethodGet:
 		return path == "/api/services" || path == "/api/traces" || strings.HasPrefix(path, "/api/traces/")
 	case namespace == "opspilot-system" && service == "otel-collector" && method == http.MethodGet:
 		return path == "/"
 	case namespace == "demo-shop" && service == "payment-api" && method == http.MethodPost:
 		return path == "/internal/fault"
+	case namespace == "demo-shop" && service == "checkout-api" && method == http.MethodPost:
+		return path == "/internal/canary"
+	case namespace == "opspilot-system" && service == "alertmanager" && method == http.MethodGet:
+		return path == "/-/ready"
+	case namespace == "opspilot-system" && service == "grafana" && method == http.MethodGet:
+		return path == "/api/health"
 	default:
 		return false
 	}

@@ -41,22 +41,25 @@ import_image rancher/mirrored-coredns-coredns:1.12.0
 kubectl -n kube-system delete pod -l k8s-app=kube-dns --wait=false >/dev/null 2>&1 || true
 kubectl --request-timeout=30s -n kube-system rollout status deployment/coredns --timeout=180s
 
-if ! docker image inspect opspilot-demo:1.4.2 >/dev/null 2>&1; then
-  docker build -t opspilot-demo:1.4.2 -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
-fi
-if ! docker image inspect opspilot-demo:1.5.0-bad >/dev/null 2>&1; then
-  docker build -t opspilot-demo:1.5.0-bad --build-arg BAKED_FAULT=degraded -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
-fi
+docker build -t opspilot-demo:0.3.0 -t opspilot-demo:1.4.2 -t opspilot-demo:1.5.0 -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
+docker build -t opspilot-demo:1.5.0-bad --build-arg BAKED_FAULT=degraded -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
+docker build -t opspilot-demo:1.6.0-bad --build-arg BAKED_FAULT=canarybad -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
 import_image opspilot-demo:0.3.0
 import_image opspilot-demo:1.4.2
+import_image opspilot-demo:1.5.0
 import_image opspilot-demo:1.5.0-bad
+import_image opspilot-demo:1.6.0-bad
 import_image prom/prometheus:v2.55.1
+import_image prom/alertmanager:v0.27.0
+import_image grafana/grafana:11.3.1
 import_image otel/opentelemetry-collector:0.115.1
 import_image jaegertracing/all-in-one:1.62.0
 
 kubectl apply -f "$ROOT/infra/kubernetes/observability.yaml"
 kubectl apply -f "$ROOT/infra/kubernetes/demo-shop.yaml"
-kubectl --request-timeout=30s -n opspilot-system rollout status deployment/prometheus deployment/otel-collector deployment/jaeger --timeout=180s
+kubectl --request-timeout=30s -n demo-shop rollout restart deployment/storefront deployment/checkout-api deployment/payment-api deployment/orders-api deployment/inventory-api deployment/traffic
+kubectl --request-timeout=30s -n opspilot-system rollout restart deployment/prometheus
+kubectl --request-timeout=30s -n opspilot-system rollout status deployment/prometheus deployment/otel-collector deployment/jaeger deployment/alertmanager deployment/grafana --timeout=180s
 kubectl --request-timeout=30s -n demo-shop rollout status deployment/storefront deployment/checkout-api deployment/payment-api deployment/orders-api deployment/inventory-api deployment/traffic --timeout=180s
 kubectl -n demo-shop get deploy,po
 kubectl -n opspilot-system get deploy,po

@@ -96,6 +96,8 @@ See [docs/architecture/overview.md](docs/architecture/overview.md).
 - A development-only bad release, `payment-api` `1.5.0-bad`, and a human-approved rollback to `1.4.2` verified with Prometheus
 - A local 15-minute availability SLO for `payment-api` (target 99.9%)
 - Evidence snapshots with stable IDs, post-open trace enrichment, and a server-side OpenAI investigator that cites those IDs
+- A payment-api canary (`1.5.0` or `1.6.0-bad`) beside stable `1.4.2`, with 5/25/50 percent checkout traffic, a Prometheus SLO gate, and a human-approved promote or abort
+- Grafana and Alertmanager in `opspilot-system`, provisioned from the repo
 - `GET /health` and `GET /ready` (PostgreSQL, Kubernetes, Prometheus, collector, Jaeger, AI provider status)
 - Development-only `POST /api/v1/demo/reset`, which restores `INC-142` and does not delete cluster data
 
@@ -165,7 +167,9 @@ The API listens on [http://127.0.0.1:8094](http://127.0.0.1:8094). Migrations ru
 
 For a real investigation, set `OPSPILOT_AI_PROVIDER=openai` and `OPSPILOT_AI_API_KEY` in the gitignored repo-root `.env`. The API loads that file in development and does not override variables already present in the environment. Leave both values empty in `.env.example`. `OPSPILOT_AI_MODEL` defaults to `gpt-4.1-mini`. `OPSPILOT_AI_PROVIDER=fixture` is labeled and is not a fallback for a failed OpenAI call.
 
-`GET /api/v1/ai/status` is `connected` when the key can list models. A completion can still fail. The live account returned HTTP 429 `credit_balance_exhausted`. That is stored as `quota: credit_balance_exhausted` and is not replaced with a fixture result. Detection, approval, and the payment-api rollback keep working.
+`GET /api/v1/ai/status` is `connected` when the key can list models. A completion can still fail. The live account returned HTTP 429 `credit_balance_exhausted`. That is stored as `quota: credit_balance_exhausted` and is not replaced with a fixture result. Detection, approval, the payment-api rollback, and the canary gate keep working.
+
+Grafana is anonymous and in-cluster at `http://grafana.opspilot-system:3000` (host port 3481 when the dev port-forward is running). Alertmanager is `http://alertmanager.opspilot-system:9093` (host port 3482). Neither UI can change a rollout. The canary gate is 20 requests, 5% errors, 300ms p95, and a Ready candidate, measured with a server-built 2 minute window. Stages wait at least 45 seconds. `POST /api/v1/lab/payment-api/canary/good` and `/bad` are refused in production and accept no image or namespace.
 
 Terminal two:
 
@@ -234,3 +238,6 @@ runbooks     payment-api rollback and reliability degradation
 - [0014 — Structured output validation](docs/adr/0014-structured-output-validation.md)
 - [0015 — Prompt injection and sanitization](docs/adr/0015-prompt-injection-and-sanitization.md)
 - [0016 — AI recommendation versus execution](docs/adr/0016-ai-recommendation-vs-execution.md)
+- [0017 — Progressive delivery](docs/adr/0017-progressive-delivery.md)
+- [0018 — SLO-gated canary](docs/adr/0018-slo-gated-canary.md)
+- [0019 — AI versus the rollout gate](docs/adr/0019-ai-rollout-authority.md)

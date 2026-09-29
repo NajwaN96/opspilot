@@ -33,6 +33,7 @@ type Snapshot struct {
 	P99          float64
 	Availability float64
 	RequestRate  float64
+	LatencyKnown bool
 }
 
 type Prometheus struct {
@@ -72,7 +73,7 @@ func (p Prometheus) ServiceWindow(ctx context.Context, service, namespace, windo
 		return out, nil
 	}
 	p50, _, _ := p.instant(ctx, p50Q)
-	p95, _, _ := p.instant(ctx, p95Q)
+	p95, p95OK, _ := p.instant(ctx, p95Q)
 	p99, _, _ := p.instant(ctx, p99Q)
 	errorRate := 0.0
 	availability := 1.0
@@ -94,6 +95,38 @@ func (p Prometheus) ServiceWindow(ctx context.Context, service, namespace, windo
 		P99:          p99,
 		Availability: availability,
 		RequestRate:  requests / seconds,
+		LatencyKnown: p95OK,
+	}, nil
+}
+
+// VersionWindow is the candidate or stable series for one known payment-api version.
+// The PromQL is built in this package. Callers cannot supply a query.
+func (p Prometheus) VersionWindow(ctx context.Context, service, namespace, version, window string) (Snapshot, error) {
+	out := Snapshot{Source: "unavailable", Service: service, Namespace: namespace, Message: "Telemetry unavailable", Updated: p.now()}
+	if p.Get == nil {
+		return out, nil
+	}
+	requestsQ, errorsQ, _, p95Q, _, err := BuildVersionQueries(service, namespace, version, window)
+	if err != nil {
+		out.Message = err.Error()
+		return out, nil
+	}
+	requests, ok, err := p.instant(ctx, requestsQ)
+	if err != nil || !ok {
+		return out, nil
+	}
+	errors, _, err := p.instant(ctx, errorsQ)
+	if err != nil {
+		return out, nil
+	}
+	p95, p95OK, _ := p.instant(ctx, p95Q)
+	errorRate := 0.0
+	if requests > 0 {
+		errorRate = errors / requests
+	}
+	return Snapshot{
+		Available: true, Source: "prometheus", Service: service, Namespace: namespace, Updated: p.now(),
+		Requests: requests, Errors: errors, ErrorRate: errorRate, P95: p95, LatencyKnown: p95OK,
 	}, nil
 }
 
@@ -133,6 +166,27 @@ func BuildQueries(service, namespace, window string) (requests, errors, p50, p95
 		return "", "", "", "", "", fmt.Errorf("window is not allowed")
 	}
 	selector := fmt.Sprintf(`service="%s",namespace="%s"`, service, namespace)
+	requests = fmt.Sprintf(`sum(increase(http_requests_total{%s}[%s]))`, selector, window)
+	errors = fmt.Sprintf(`sum(increase(http_requests_total{%s,status_code=~"5.."}[%s]))`, selector, window)
+	base := fmt.Sprintf(`sum by (le) (rate(http_request_duration_seconds_bucket{%s}[%s]))`, selector, window)
+	p50 = fmt.Sprintf(`histogram_quantile(0.50, %s)`, base)
+	p95 = fmt.Sprintf(`histogram_quantile(0.95, %s)`, base)
+	p99 = fmt.Sprintf(`histogram_quantile(0.99, %s)`, base)
+	return requests, errors, p50, p95, p99, nil
+}
+
+// BuildVersionQueries is the only version-scoped PromQL the canary gate sends.
+func BuildVersionQueries(service, namespace, version, window string) (requests, errors, p50, p95, p99 string, err error) {
+	if !namePattern.MatchString(service) || !namePattern.MatchString(namespace) {
+		return "", "", "", "", "", fmt.Errorf("service identity is not allowed")
+	}
+	if version != "1.4.2" && version != "1.5.0" && version != "1.5.0-bad" && version != "1.6.0-bad" {
+		return "", "", "", "", "", fmt.Errorf("version is not allowed")
+	}
+	if window != "1m" && window != "2m" && window != "15m" {
+		return "", "", "", "", "", fmt.Errorf("window is not allowed")
+	}
+	selector := fmt.Sprintf(`service="%s",namespace="%s",version="%s"`, service, namespace, version)
 	requests = fmt.Sprintf(`sum(increase(http_requests_total{%s}[%s]))`, selector, window)
 	errors = fmt.Sprintf(`sum(increase(http_requests_total{%s,status_code=~"5.."}[%s]))`, selector, window)
 	base := fmt.Sprintf(`sum by (le) (rate(http_request_duration_seconds_bucket{%s}[%s]))`, selector, window)
