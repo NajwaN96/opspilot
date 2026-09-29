@@ -2,6 +2,12 @@
 
 Local k3d does not use this runbook. `infra/scripts/up-dev-cluster.sh` still builds `opspilot-dev`.
 
+## Observed account
+
+A console `aws login` session can read this account. The profile stores a login session and `region = us-east-1`. It does not store an access key. The free-plan API reported an active free plan and credits. Credits are not approval to apply the EKS stack. Cost Explorer is not enabled, so this runbook does not quote a billed dollar total from Cost Explorer.
+
+Notification-only AWS Budgets are free. Budget actions and budget reports are not. No budget was created here because the account contact record has no email address and no billing alternate contact. An alert with nowhere to send is not an alert. Alerts do not stop resources by themselves.
+
 ## Zero-cost stop
 
 The default portfolio path does not apply this stack. Amazon EKS, the managed node, public IPv4, and ECR can charge the account. Official EKS pricing is $0.10 per cluster-hour on standard support. This environment could not read the account plan or credit balance, so those prices are not assumed to be covered.
