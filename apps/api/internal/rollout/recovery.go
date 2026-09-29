@@ -32,6 +32,11 @@ func (e *Engine) present(ctx context.Context, item Rollout) Rollout {
 				item.CandidateActivity = "unavailable"
 			}
 		}
+		if ready, _, version, err := e.Cluster.StableReady(ctx); err == nil && version != "" {
+			item.LiveStableKnown = true
+			item.LiveStableReady = ready
+			item.LiveStableVersion = version
+		}
 	}
 	if e.Incidents != nil {
 		if incident, ok, err := e.Incidents.Associated(ctx, item.CreatedAt); err == nil && ok {

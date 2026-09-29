@@ -1,6 +1,7 @@
 package rollout
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/opspilot/opspilot/apps/api/internal/release"
@@ -52,6 +53,18 @@ func TestPromotionRequiresPassAndRejectsAIOverride(t *testing.T) {
 	item.Namespace = "kube-system"
 	if err := AllowApprove(item, ActionAbort); err == nil {
 		t.Fatal("other namespace accepted")
+	}
+}
+
+func TestApproveBeforeAwaitingIsRejected(t *testing.T) {
+	item := Rollout{
+		Service: release.Deployment, Namespace: release.Namespace, Cluster: release.Cluster,
+		State: StateRunning, Analysis: ResultInsufficient, Weight: 5,
+		CandidateVersion: release.CandidateGoodVersion, CandidateImage: release.CandidateGoodImage,
+	}
+	err := AllowApprove(item, ActionPromote)
+	if err == nil || !strings.Contains(err.Error(), "not awaiting") {
+		t.Fatal(err)
 	}
 }
 

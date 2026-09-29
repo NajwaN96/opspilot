@@ -20,7 +20,7 @@ Each fact has one source:
 - Jaeger owns trace evidence.
 - The investigator owns a recommendation and nothing else.
 
-`desired=0` and `ready=0` is `idle`. `desired>0` and `ready<desired` stays degraded. The API reports `stageWeight` and `liveWeight` separately. Historical events are not rewritten.
+`desired=0` and `ready=0` is `idle`. `desired>0` and `ready<desired` stays degraded. The API reports `stageWeight` and `liveWeight` separately. `stableVersion` stays the baseline recorded when the rollout started. `liveStableVersion` is read from the stable Deployment and is not written back over that baseline. Historical events are not rewritten.
 
 `SUCCEEDED` requires the promoted image to be Ready, the canary scaled to zero, live weight 0, and a healthy verification. `ABORTED` requires stable `1.4.2` Ready, the same idle candidate, and a healthy verification. `FAILED` means verification or startup could not be completed safely. `NEEDS_ATTENTION` is used when a repair cannot be proven; the controller does not mark that rollout successful.
 

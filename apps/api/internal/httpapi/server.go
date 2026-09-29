@@ -349,7 +349,7 @@ func (s *Server) writeRolloutErr(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusNotFound, "not_found", "rollout not found")
 	case strings.Contains(text, "already active"):
 		writeAPIError(w, http.StatusConflict, "conflict", text)
-	case strings.Contains(text, "must") || strings.Contains(text, "requires") || strings.Contains(text, "not ") || strings.Contains(text, "unknown") || strings.Contains(text, "does not"):
+	case strings.Contains(text, "must") || strings.Contains(text, "requires") || strings.Contains(text, "not ") || strings.Contains(text, "unknown") || strings.Contains(text, "does not") || strings.Contains(text, "rollout is"):
 		writeAPIError(w, http.StatusBadRequest, "invalid", text)
 	default:
 		s.logger.Error("rollout", "error", err)

@@ -14,6 +14,9 @@ interface Rollout {
   namespace: string;
   cluster: string;
   stableVersion: string;
+  liveStableVersion?: string;
+  liveStableKnown?: boolean;
+  liveStableReady?: boolean;
   candidateVersion: string;
   state: string;
   weight: number;
@@ -41,13 +44,19 @@ interface Rollout {
   events?: { at: string; title: string; detail: string; kind: string }[];
 }
 
+const terminalStates = ["SUCCEEDED", "FAILED", "ABORTED", "NEEDS_ATTENTION"];
+
 export function RolloutsPage() {
   const list = useApi<Rollout[]>("/api/v1/rollouts", 3000);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   if (list.loading && !list.data) return <LoadingBlock />;
   if (!list.data) return <ErrorBlock message={list.error ?? "Rollouts unavailable"} onRetry={() => void list.reload()} />;
-  const active = list.data.find((item) => !["SUCCEEDED", "FAILED", "ABORTED"].includes(item.state)) ?? list.data[0];
+  const active =
+    list.data.find((item) => item.id === selected) ??
+    list.data.find((item) => !["SUCCEEDED", "FAILED", "ABORTED"].includes(item.state)) ??
+    list.data[0];
 
   async function approve(action: string) {
     if (!active) return;
@@ -70,6 +79,23 @@ export function RolloutsPage() {
         title="Progressive delivery"
         description="A canary runs beside the stable payment-api. Prometheus decides pass or fail. A person approves the only production change."
       />
+      {list.data.length > 0 ? (
+        <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+          {list.data.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setSelected(item.id)}
+              className={`shrink-0 rounded-md border px-3 py-2 text-left text-xs ${item.id === active?.id ? "border-foreground/40 bg-card" : "border-border text-muted-foreground"}`}
+            >
+              <div className="font-mono text-foreground">{item.id}</div>
+              <div>
+                {item.state} · stage {item.stageWeight || item.weight}% · live {item.liveWeightKnown ? `${item.liveWeight}%` : "unknown"}
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : null}
       {!active ? (
         <EmptyBlock
           title="No canary is running"
@@ -97,11 +123,13 @@ function RolloutDetail({
   const view = detail.data ?? item;
   const events = view.events ?? [];
   const gateKnown = view.analysis === "PASS" || view.analysis === "FAIL" || view.analysis === "INSUFFICIENT_DATA";
-  const terminal = ["SUCCEEDED", "ABORTED", "FAILED", "NEEDS_ATTENTION"].includes(view.state);
+  const terminal = terminalStates.includes(view.state);
   const stage = view.stageWeight || view.weight;
   const approved = events.some((event) => event.title === "Human approved");
   const executed = events.some((event) => event.title === "Candidate removed" || event.title === "Candidate promoted");
-  const stableHealthy = view.verification.includes("on ");
+  const liveStable = view.liveStableKnown
+    ? `${view.liveStableVersion}${view.liveStableReady ? " — healthy" : " — not ready"}`
+    : "unknown";
   return (
     <div className="grid gap-3">
       <Panel title={`${view.id} · ${view.service}`}>
@@ -110,7 +138,9 @@ function RolloutDetail({
           <Field label={terminal ? "Last evaluated stage" : "Current stage"} value={`${stage}%`} />
           <Field label="Live canary traffic" value={view.liveWeightKnown ? `${view.liveWeight}%` : "unknown"} />
           <Field label="Candidate" value={`${view.candidateVersion} — ${activityLabel(view.candidateActivity)}`} />
-          <Field label="Stable" value={`${view.stableVersion}${stableHealthy ? " — healthy" : ""}`} />
+          <Field label="Baseline" value={view.stableVersion} />
+          <Field label="Live stable" value={liveStable} />
+          {view.state === "SUCCEEDED" ? <Field label="Promoted version" value={view.candidateVersion} /> : null}
           <Field label="SLO gate" value={view.analysis || "waiting"} />
           <Field label="Remediation" value={approved && executed ? "approved + executed" : approved ? "approved" : "not executed"} />
           <Field label="Incident" value={view.incidentId ? `${view.incidentId} ${view.incidentStatus}` : "none"} />

@@ -26,7 +26,7 @@ func AllowApprove(item Rollout, action string) error {
 		return fmt.Errorf("target is not demo-shop/payment-api")
 	}
 	if item.State != StateAwaiting {
-		return fmt.Errorf("rollout is %s", item.State)
+		return fmt.Errorf("rollout is not awaiting approval")
 	}
 	if action != item.ProposalAction {
 		return fmt.Errorf("action does not match the proposal")

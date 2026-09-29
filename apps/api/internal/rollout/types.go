@@ -41,6 +41,9 @@ type Rollout struct {
 	Cluster           string    `json:"cluster"`
 	Namespace         string    `json:"namespace"`
 	StableVersion     string    `json:"stableVersion"`
+	LiveStableVersion string    `json:"liveStableVersion,omitempty"`
+	LiveStableKnown   bool      `json:"liveStableKnown"`
+	LiveStableReady   bool      `json:"liveStableReady"`
 	CandidateVersion  string    `json:"candidateVersion"`
 	CandidateImage    string    `json:"candidateImage"`
 	State             string    `json:"state"`

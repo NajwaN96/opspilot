@@ -3,6 +3,7 @@ package rollout
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +37,57 @@ func TestTerminalRolloutKeepsStageAndReadsLiveWeight(t *testing.T) {
 		if view.CandidateActivity != "idle" {
 			t.Fatalf("%s activity %s", tc.state, view.CandidateActivity)
 		}
+		if view.StableVersion != release.GoodVersion || !view.LiveStableKnown || view.LiveStableVersion != release.GoodVersion {
+			t.Fatalf("%s baseline %s live stable %s known %t", tc.state, view.StableVersion, view.LiveStableVersion, view.LiveStableKnown)
+		}
+	}
+}
+
+func TestPresentReadsPromotedStableWithoutRewritingBaseline(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	cluster := &fakeCluster{
+		weight: 0, desired: 0, stableReady: true,
+		image: release.CandidateGoodImage, version: release.CandidateGoodVersion,
+	}
+	store := newMem()
+	item := sampleRollout(StateSucceeded, 50, now)
+	item.CandidateVersion = release.CandidateGoodVersion
+	item.CandidateImage = release.CandidateGoodImage
+	if err := store.Create(context.Background(), item); err != nil {
+		t.Fatal(err)
+	}
+	engine := &Engine{Cluster: cluster, Store: store, Now: func() time.Time { return now }}
+	view, err := engine.View(context.Background(), item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.StableVersion != release.GoodVersion {
+		t.Fatalf("baseline rewritten to %s", view.StableVersion)
+	}
+	if !view.LiveStableKnown || !view.LiveStableReady || view.LiveStableVersion != release.CandidateGoodVersion {
+		t.Fatalf("live stable %s known %t ready %t", view.LiveStableVersion, view.LiveStableKnown, view.LiveStableReady)
+	}
+	if view.StageWeight != 50 || view.LiveWeight != 0 {
+		t.Fatalf("stage %d live %d", view.StageWeight, view.LiveWeight)
+	}
+}
+
+func TestApproveWhileRunningDoesNotMutate(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	cluster := &fakeCluster{weight: 5, desired: 1, ready: true, stableReady: true, image: release.GoodImage, version: release.GoodVersion}
+	store := newMem()
+	item := sampleRollout(StateRunning, 5, now)
+	if err := store.Create(context.Background(), item); err != nil {
+		t.Fatal(err)
+	}
+	engine := &Engine{Cluster: cluster, Store: store, Now: func() time.Time { return now }}
+	_, err := engine.Approve(context.Background(), item.ID, ActionPromote)
+	if err == nil || !strings.Contains(err.Error(), "not awaiting") {
+		t.Fatal(err)
+	}
+	got, err := store.Get(context.Background(), item.ID)
+	if err != nil || got.State != StateRunning || cluster.promotes != 0 {
+		t.Fatalf("state %s promotes %d err %v", got.State, cluster.promotes, err)
 	}
 }
 
