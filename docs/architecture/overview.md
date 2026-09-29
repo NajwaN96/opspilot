@@ -77,29 +77,35 @@ Package boundaries in `apps/api`:
 | `internal/detection` | Thresholds, deduplication streaks, diagnosis, and the local SLO |
 | `internal/experiment` | Allow-listed payment-api fault. It does not roll back a Deployment |
 | `internal/model` | Shared response types, including source and telemetry |
-| `internal/config` | Address, database URL, environment, namespaces, sync interval |
+| `internal/release` | The only payment-api version pair the executor may apply |
+| `internal/investigate` | Evidence snapshots, sanitization, provider calls, and citation checks. No executor and no Kubernetes client |
+| `internal/config` | Address, database URL, environment, namespaces, sync interval, AI provider |
 
-## Target path
+## Investigation path
 
 ```
-Kubernetes
-  → OpenTelemetry
-  → Prometheus / logs / traces
-  → OpsPilot intake
-  → incident engine
-  → investigator
-  → remediation proposal
-  → policy engine
-  → human approval when required
-  → constrained Kubernetes action
-  → recovery verification
+Real incident
+  → Evidence builder
+       Prometheus
+       OpenTelemetry / Jaeger
+       Kubernetes reader
+       Change metadata
+       Runbooks
+  → Evidence snapshot
+  → Sanitization
+  → OpenAI investigator
+  → Structured output
+  → Evidence validation
+  → Semantic recommendation
+  → Deterministic proposal builder
+  → Policy engine
+  → Human approval
+  → Constrained executor
+  → Kubernetes
+  → Prometheus verification
 ```
 
-Intake is read-only. It normalizes deploy markers, metrics, logs, traces, and Kubernetes events into the same evidence model the incident page already renders.
-
-The incident engine opens and updates incidents from those signals. It does not change the cluster.
-
-The investigator reads an incident and its evidence and returns a proposal: action, target, from version, to version, confidence, and the evidence it used. It does not receive a Kubernetes client.
+The investigator reads the snapshot. It does not receive the mutator, a shell, kubectl, a Docker socket, arbitrary SQL, or arbitrary PromQL. `ROLLBACK_PAYMENT_API` is a semantic label. `release.Propose` still decides the image pair, and only after a person approves does the executor change `demo-shop/payment-api`.
 
 ## Security principle
 
@@ -123,10 +129,11 @@ The MVP already follows that split for one case. `POST /api/v1/incidents/INC-142
 ## What is deliberately absent
 
 - No cloud provider SDK and no EKS
-- No mutating Kubernetes client and no kubectl endpoint
-- No Loki, Tempo, or Grafana
-- No model API key
+- No generic kubectl, apply, patch, or exec endpoint
+- No Loki or Grafana
+- No API key in the browser, Compose, or Kubernetes manifests
 - No Terraform or Argo CD
 - No browser-supplied PromQL, shell command, or experiment namespace
+- No autonomous remediation and no approval bypass
 
-Those are later adapters. They attach at intake, policy, or the executor. They should not be threaded through the React views.
+The payment-api mutator is a separate method from the reader. The investigator is not given it.

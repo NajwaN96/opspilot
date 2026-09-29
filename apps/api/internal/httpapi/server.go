@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/opspilot/opspilot/apps/api/internal/investigate"
 	"github.com/opspilot/opspilot/apps/api/internal/kubernetes"
 	"github.com/opspilot/opspilot/apps/api/internal/release"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
@@ -27,6 +28,8 @@ type Server struct {
 	Ready func(r *http.Request) map[string]any
 	// Sources reads local Prometheus and Jaeger. It does not accept browser PromQL.
 	Sources *telemetry.Sources
+	// Investigator reads prepared evidence. It cannot mutate Kubernetes.
+	Investigator *investigate.Runner
 }
 
 func New(svc *service.Service, logger *slog.Logger, version string) *Server {
@@ -50,6 +53,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/incidents", s.listIncidents)
 	mux.HandleFunc("GET /api/v1/incidents/{id}", s.getIncident)
 	mux.HandleFunc("POST /api/v1/incidents/{id}/remediations", s.startRemediation)
+	mux.HandleFunc("GET /api/v1/incidents/{id}/investigation", s.getInvestigation)
+	mux.HandleFunc("POST /api/v1/incidents/{id}/investigation", s.runInvestigation)
+	mux.HandleFunc("GET /api/v1/ai/status", s.aiStatus)
 	mux.HandleFunc("GET /api/v1/experiments", s.listExperiments)
 	mux.HandleFunc("POST /api/v1/experiments", s.startExperiment)
 	mux.HandleFunc("POST /api/v1/experiments/{id}/stop", s.stopExperiment)
@@ -187,6 +193,54 @@ func (s *Server) startExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, item)
+}
+
+func (s *Server) getInvestigation(w http.ResponseWriter, r *http.Request) {
+	if s.Investigator == nil {
+		writeJSON(w, http.StatusOK, investigate.View{Status: "unavailable", Provider: "disabled", Error: "ai investigation unavailable"})
+		return
+	}
+	view, err := s.Investigator.View(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (s *Server) runInvestigation(w http.ResponseWriter, r *http.Request) {
+	if s.Investigator == nil {
+		writeJSON(w, http.StatusOK, investigate.View{Status: "unavailable", Provider: "disabled", Error: "ai investigation unavailable"})
+		return
+	}
+	var body struct{}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeAPIError(w, http.StatusBadRequest, "invalid", "this action does not accept parameters")
+		return
+	}
+	cerr := s.Investigator.Consider(r.Context(), r.PathValue("id"), true)
+	view, err := s.Investigator.View(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeErr(w, err)
+		return
+	}
+	if view.Status == investigate.StatusNotRequested && cerr != nil {
+		s.writeErr(w, cerr)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, view)
+}
+
+func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
+	body := map[string]string{"provider": "disabled", "model": "", "status": "disabled"}
+	if s.Investigator != nil && s.Investigator.Provider != nil {
+		body["provider"] = s.Investigator.Provider.Name()
+		body["model"] = s.Investigator.Provider.Model()
+		body["status"] = s.Investigator.Status(r.Context())
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func (s *Server) deployBadPayment(w http.ResponseWriter, r *http.Request) {

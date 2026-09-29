@@ -10,7 +10,7 @@ const rows = [
   ["Cluster access", "None. The executor is simulated and does not load a kubeconfig."],
   ["Remediation", "INC-142 stays simulated. A detected incident can approve one real rollback of demo-shop/payment-api from 1.5.0-bad to 1.4.2."],
   ["Policy", "The live action cannot target another namespace or Deployment, and the browser cannot supply an image."],
-  ["AI investigator", "Not connected. Future recommendations must pass policy before any executor runs."],
+  ["AI investigator", "Server-side only. It reads a prepared evidence snapshot and cannot execute. The API key is not shown here."],
   ["Telemetry", "Metrics, logs, traces, and events on the incident page are simulated."],
 ];
 

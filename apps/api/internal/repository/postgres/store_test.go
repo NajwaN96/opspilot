@@ -135,6 +135,7 @@ func resetDatabase(t *testing.T, url string) {
 	defer store.Close()
 	if _, err := store.pool.Exec(context.Background(), `
 		TRUNCATE audit_events, approvals, remediation_executions, remediation_proposals,
+		         ai_investigations, incident_evidence_snapshots,
 		         incident_events, incidents, lab_experiments, services, kubernetes_resources, kubernetes_events, clusters, demo_state
 	`); err != nil {
 		t.Fatal(err)

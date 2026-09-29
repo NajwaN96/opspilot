@@ -21,6 +21,9 @@ type Config struct {
 	AllowDemoReset   bool
 	AllowExperiments bool
 	FaultToken       string
+	AIProvider       string
+	AIAPIKey         string
+	AIModel          string
 }
 
 func Load() Config {
@@ -60,6 +63,10 @@ func Load() Config {
 	if token == "" && env != "production" {
 		token = "opspilot-local-fault"
 	}
+	model := os.Getenv("OPSPILOT_AI_MODEL")
+	if model == "" {
+		model = "gpt-4.1-mini"
+	}
 	return Config{
 		Addr:             addr,
 		CORSOrigins:      origins,
@@ -74,6 +81,9 @@ func Load() Config {
 		AllowDemoReset:   env != "production",
 		AllowExperiments: env != "production",
 		FaultToken:       token,
+		AIProvider:       strings.ToLower(strings.TrimSpace(os.Getenv("OPSPILOT_AI_PROVIDER"))),
+		AIAPIKey:         os.Getenv("OPSPILOT_AI_API_KEY"),
+		AIModel:          model,
 	}
 }
 

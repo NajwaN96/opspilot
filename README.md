@@ -4,7 +4,7 @@ Kubernetes reliability control plane.
 
 Production incidents are still reconstructed by hand: a deploy lands, latency moves, someone pastes logs into a channel, and a rollback waits on a person who has standing cluster-admin access. OpsPilot is the control plane for that loop. It is meant to detect a change, correlate it with telemetry, explain the likely cause, propose one constrained action, require a human when the policy says so, execute only that action, and verify recovery.
 
-This repository is a local control plane. PostgreSQL stores operational state, a read-only client discovers workloads on a local Kubernetes cluster, and demo-shop emits real Prometheus metrics and OpenTelemetry traces. A deterministic rule can open an incident from that telemetry. `INC-142` still uses a simulated rollback. A detected incident can approve one real rollback: `demo-shop/payment-api` from `1.5.0-bad` to `1.4.2`. Nothing here talks to a cloud account or a model.
+This repository is a local control plane. PostgreSQL stores operational state, a read-only client discovers workloads on a local Kubernetes cluster, and demo-shop emits real Prometheus metrics and OpenTelemetry traces. A deterministic rule can open an incident from that telemetry. An evidence snapshot can be sent to a configured OpenAI investigator, which may recommend a semantic action and cannot execute it. `INC-142` still uses a simulated rollback. A detected incident can approve one real rollback: `demo-shop/payment-api` from `1.5.0-bad` to `1.4.2`. Nothing here talks to a cloud account.
 
 ## What it is
 
@@ -25,7 +25,7 @@ The product loop, end to end:
 7. **Verify** that the symptom returned to baseline.
 8. **Learn** from the closed incident. Not built yet.
 
-`INC-142` still walks that loop on seeded telemetry. A detected `payment-api` incident can walk it on live Prometheus, traces, and the local cluster: the rule recommends a rollback only for release `1.5.0-bad`, a person approves it, and the executor changes that one Deployment. Step 8 is still planned.
+`INC-142` still walks that loop on seeded telemetry. A detected `payment-api` incident can walk it on live Prometheus, traces, and the local cluster. The investigator cites a bounded snapshot and may recommend `ROLLBACK_PAYMENT_API`. That recommendation does not choose an image. The rule recommends a rollback only for release `1.5.0-bad`, a person approves it, and the executor changes that one Deployment.
 
 ## Safety model
 
@@ -95,7 +95,8 @@ See [docs/architecture/overview.md](docs/architecture/overview.md).
 - A constrained Reliability Lab fault on `payment-api` only: 40% HTTP 500 and 500ms latency, 30/60/120 seconds, auto-expire at 5 minutes
 - A development-only bad release, `payment-api` `1.5.0-bad`, and a human-approved rollback to `1.4.2` verified with Prometheus
 - A local 15-minute availability SLO for `payment-api` (target 99.9%)
-- `GET /health` and `GET /ready` (PostgreSQL, Kubernetes, Prometheus, collector, Jaeger)
+- Evidence snapshots with stable IDs, post-open trace enrichment, and a server-side OpenAI investigator that cites those IDs
+- `GET /health` and `GET /ready` (PostgreSQL, Kubernetes, Prometheus, collector, Jaeger, AI provider status)
 - Development-only `POST /api/v1/demo/reset`, which restores `INC-142` and does not delete cluster data
 
 ### Simulated
@@ -111,7 +112,7 @@ See [docs/architecture/overview.md](docs/architecture/overview.md).
 - GitOps and AWS/EKS
 - Any remediation other than `demo-shop/payment-api` `1.5.0-bad` → `1.4.2`
 
-AWS, Terraform, Grafana, Loki, Argo, and an AI provider are intentionally not integrated. The Kubernetes reader still cannot create, update, delete, or exec. The payment rollback is a separate method, and the detection engine is not given it. Generic actions such as `rollback` are still rejected for `INC-REAL-…` incidents.
+AWS, Terraform, Grafana, Loki, and Argo are intentionally not integrated. The Kubernetes reader still cannot create, update, delete, or exec. The payment rollback is a separate method, and neither the detection engine nor the investigator is given it. Generic actions such as `rollback` are still rejected for `INC-REAL-…` incidents. The model may recommend `ROLLBACK_PAYMENT_API`; that string is not an executor request.
 
 ## Current MVP
 
@@ -160,7 +161,11 @@ export OPSPILOT_ENV=development
 go run ./cmd/opspilot
 ```
 
-The API listens on [http://127.0.0.1:8094](http://127.0.0.1:8094). Migrations run on startup. `GET /health` is liveness. `GET /ready` reports database and Kubernetes connectivity. Without `OPSPILOT_DATABASE_URL` the API keeps the in-memory simulation and does not persist approvals.
+The API listens on [http://127.0.0.1:8094](http://127.0.0.1:8094). Migrations run on startup. `GET /health` is liveness. `GET /ready` reports database, Kubernetes, telemetry, and AI provider status. Without `OPSPILOT_DATABASE_URL` the API keeps the in-memory simulation and does not persist approvals.
+
+For a real investigation, set `OPSPILOT_AI_PROVIDER=openai` and `OPSPILOT_AI_API_KEY` in the gitignored repo-root `.env`. The API loads that file in development and does not override variables already present in the environment. Leave both values empty in `.env.example`. `OPSPILOT_AI_MODEL` defaults to `gpt-4.1-mini`. `OPSPILOT_AI_PROVIDER=fixture` is labeled and is not a fallback for a failed OpenAI call.
+
+`GET /api/v1/ai/status` is `connected` when the key can list models. A completion can still fail. The live account returned HTTP 429 `credit_balance_exhausted`. That is stored as `quota: credit_balance_exhausted` and is not replaced with a fixture result. Detection, approval, and the payment-api rollback keep working.
 
 Terminal two:
 
@@ -208,8 +213,8 @@ runbooks     payment-api rollback and reliability degradation
 
 ## Roadmap
 
-1. Keep the investigator off the mutating client. Stopping a Reliability Lab fault is not the payment-api rollback.
-2. Add further named actions only with the same closed target list. Do not add a generic Kubernetes write API.
+1. Add further named actions only with the same closed target list. Do not add a generic Kubernetes write API.
+2. Keep the investigator on prepared snapshots. Do not give it a cluster write client or a shell.
 
 ## Decisions
 
@@ -224,3 +229,8 @@ runbooks     payment-api rollback and reliability degradation
 - [0009 — Controlled failure injection](docs/adr/0009-controlled-failure-injection.md)
 - [0010 — Deterministic incident detection](docs/adr/0010-deterministic-incident-detection.md)
 - [0011 — Constrained payment-api rollback](docs/adr/0011-payment-api-rollback.md)
+- [0012 — AI investigator boundary](docs/adr/0012-ai-investigator-boundary.md)
+- [0013 — Evidence-grounded investigation](docs/adr/0013-evidence-grounded-investigation.md)
+- [0014 — Structured output validation](docs/adr/0014-structured-output-validation.md)
+- [0015 — Prompt injection and sanitization](docs/adr/0015-prompt-injection-and-sanitization.md)
+- [0016 — AI recommendation versus execution](docs/adr/0016-ai-recommendation-vs-execution.md)

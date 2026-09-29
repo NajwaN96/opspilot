@@ -16,6 +16,7 @@ import (
 	"github.com/opspilot/opspilot/apps/api/internal/executor"
 	"github.com/opspilot/opspilot/apps/api/internal/experiment"
 	"github.com/opspilot/opspilot/apps/api/internal/httpapi"
+	"github.com/opspilot/opspilot/apps/api/internal/investigate"
 	"github.com/opspilot/opspilot/apps/api/internal/kubernetes"
 	"github.com/opspilot/opspilot/apps/api/internal/repository"
 	"github.com/opspilot/opspilot/apps/api/internal/repository/memory"
@@ -29,6 +30,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
+	config.LoadLocalEnv()
 	cfg := config.Load()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -110,6 +112,28 @@ func main() {
 	api := httpapi.New(svc, logger, cfg.Version)
 	api.Kubernetes = reader
 	api.Sources = sources
+	var investigationStore investigate.Store
+	if pg != nil {
+		investigationStore = pg
+	}
+	investigator := &investigate.Runner{
+		Provider: aiProvider(cfg, logger),
+		Reader: investigate.Reader{
+			Metrics: sources.Prometheus,
+			Traces:  sources.Jaeger,
+			Cluster: reader,
+		},
+		Store:  investigationStore,
+		Logger: logger,
+	}
+	api.Investigator = investigator
+	if pg != nil {
+		go runEvery(ctx, 15*time.Second, func() {
+			if err := investigator.Tick(ctx); err != nil {
+				logger.Error("investigation tick", "error", err)
+			}
+		})
+	}
 	api.Ready = func(r *http.Request) map[string]any {
 		database := dbState
 		if pg != nil {
@@ -131,6 +155,7 @@ func main() {
 			"prometheus":       telemetryState["prometheus"],
 			"opentelemetry":    telemetryState["opentelemetry"],
 			"traces":           telemetryState["traces"],
+			"ai":               investigator.Status(r.Context()),
 		}
 	}
 	handler := httpapi.WithCORS(cfg.CORSOrigins, api.Handler())
@@ -157,6 +182,24 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("shutdown complete")
+}
+
+func aiProvider(cfg config.Config, logger *slog.Logger) investigate.Provider {
+	switch cfg.AIProvider {
+	case "openai":
+		if cfg.AIAPIKey == "" {
+			logger.Info("ai investigator unconfigured")
+			return investigate.Disabled{}
+		}
+		logger.Info("ai investigator configured", "provider", "openai", "model", cfg.AIModel, "key", "present")
+		return investigate.OpenAI{ModelName: cfg.AIModel, APIKey: cfg.AIAPIKey}
+	case "fixture":
+		logger.Info("ai investigator fixture")
+		return investigate.Fixture{}
+	default:
+		logger.Info("ai investigator disabled")
+		return investigate.Disabled{}
+	}
 }
 
 func openKubernetes(cfg config.Config, logger *slog.Logger) (kubernetes.Reader, *kubernetes.Client) {

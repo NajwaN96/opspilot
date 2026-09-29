@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { AIInvestigator } from "@/components/incident/ai-investigator";
 import { StatusBadge } from "@/components/status-badge";
 import { Panel } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -111,7 +112,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
             ))}
           </ul>
         </Panel>
-        <Panel title="Diagnosis">
+        <Panel title="Deterministic findings">
           <p className="text-sm font-medium">Likely cause</p>
           <p className="mt-1 text-sm">{incident.analysis?.likelyCause || incident.analysis?.cause}</p>
           <p className="mt-3 text-sm font-medium">Supporting evidence</p>
@@ -162,8 +163,11 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
           </ul>
         </Panel>
       </div>
+      <div className="mt-3">
+        <AIInvestigator incidentId={incident.id} />
+      </div>
       <div className="mt-3 grid gap-3 xl:grid-cols-2">
-        <Panel title="Remediation proposal">
+        <Panel title="Deterministic proposal">
           <p className="text-sm">{incident.recommendation?.summary}</p>
           <p className="mt-2 text-sm text-muted-foreground">{incident.recommendation?.policy}</p>
           {rollback ? (
