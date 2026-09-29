@@ -1,0 +1,98 @@
+# Phase 7 runbook — AWS dev and GitOps
+
+Local k3d does not use this runbook. `infra/scripts/up-dev-cluster.sh` still builds `opspilot-dev`.
+
+```mermaid
+flowchart LR
+  git[Git desired state] --> ci[CI fmt validate render]
+  ci --> plan[cloud-plan]
+  plan --> approve[Explicit approval]
+  approve --> tofu[OpenTofu apply]
+  tofu --> eks[EKS opspilot-aws-dev]
+  tofu --> ecr[ECR opspilot-demo]
+  ecr --> push[ecr-build-push]
+  push --> argo[Argo CD]
+  git --> argo
+  argo --> shop[demo-shop and observability]
+  shop --> ops[OpsPilot reads AWS DEV]
+```
+
+## Prerequisites
+
+- AWS CLI credentials for the portfolio account, via the normal provider chain. Do not put keys in Git, tfvars that are committed, or the investigator.
+- OpenTofu 1.12.6, kubectl, docker, and kustomize.
+- A copy of `infra/terraform/environments/dev/dev.auto.tfvars.example` named `dev.auto.tfvars`.
+- Set `aws_region`, `allowed_regions`, and `allowed_account_id` to the real account. `000000000000` is rejected.
+- Set `api_cidrs` to your current public address as a `/32`. `0.0.0.0/0` is rejected.
+- Export `AWS_REGION` to the same region.
+
+## Identity
+
+```bash
+infra/scripts/cloud-doctor
+```
+
+This prints the account, role ARN, and region. It does not create resources. If credentials are missing it exits 2.
+
+## Plan and cost review
+
+```bash
+infra/scripts/cloud-plan
+```
+
+Read the plan before any apply. The standing costs are the EKS control plane at the standard-support rate, one `t3.medium`, a 20 GiB volume, and one public IPv4 address. There is no NAT gateway.
+
+## Approval
+
+`cloud-apply` does not run unless `OPSPILOT_CLOUD_APPROVED=yes` is set for that command. A previous conversation, a plan file, or a successful doctor check is not approval.
+
+## Apply
+
+```bash
+OPSPILOT_CLOUD_APPROVED=yes infra/scripts/cloud-apply
+```
+
+## Images
+
+```bash
+OPSPILOT_CLOUD_APPROVED=yes infra/scripts/ecr-build-push
+```
+
+Then replace `ecr.invalid/opspilot-demo` in `gitops/overlays/aws-dev/kustomization.yaml` with the repository URL and commit that desired state.
+
+## Argo CD
+
+```bash
+export OPSPILOT_GITOPS_REPO=<git url Argo can read>
+OPSPILOT_CLOUD_APPROVED=yes infra/scripts/argocd-bootstrap
+kubectl -n argocd port-forward svc/argocd-server 8443:443
+```
+
+The initial password is `argocd-initial-admin-secret` in the cluster. Do not commit it. Confirm the app is Synced and Healthy:
+
+```bash
+infra/scripts/gitops-status
+```
+
+## Observability
+
+Prometheus, the collector, Jaeger, Grafana, and Alertmanager come from the same base as the local cluster. Reach them with `kubectl -n opspilot-system port-forward`. Do not add a load balancer.
+
+Point the local OpsPilot API at the EKS kubeconfig with `OPSPILOT_K8S_CLUSTER=opspilot-aws-dev` when you want the console to label the data `AWS DEV`. Leave the cluster name unset to stay on local k3d. The executor still refuses `opspilot-aws-dev`.
+
+## Drift
+
+```bash
+infra/scripts/gitops-drift-demo
+```
+
+The script adds one replica to `payment-api`, expects Argo to report the drift, syncs the Git replica count, and turns self-heal back on.
+
+## Destroy
+
+```bash
+infra/scripts/cloud-doctor
+OPSPILOT_CLOUD_APPROVED=yes OPSPILOT_CLOUD_DESTROY=yes infra/scripts/cloud-destroy
+```
+
+The script prints the account, region, and resource set, deletes OpsPilot dev load balancers if any exist, then destroys this state. Confirm with `cloud-status` that the cluster and repository are gone.

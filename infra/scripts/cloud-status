@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Read-only status for the dev cluster and ECR repository.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/preflight.sh
+source "$ROOT/infra/scripts/lib/preflight.sh"
+cloud_preflight plan
+
+echo "--- eks ---"
+aws eks describe-cluster --name opspilot-aws-dev \
+  --query 'cluster.{name:name,status:status,version:version,endpoint:endpoint}' \
+  --output table || echo "cluster not found"
+echo "--- nodegroup ---"
+aws eks describe-nodegroup --cluster-name opspilot-aws-dev --nodegroup-name opspilot-aws-dev-nodes \
+  --query 'nodegroup.{status:status,desired:scalingConfig.desiredSize,ready:status}' \
+  --output table || echo "node group not found"
+echo "--- ecr ---"
+aws ecr describe-repositories --repository-names opspilot-demo \
+  --query 'repositories[].{name:repositoryName,uri:repositoryUri}' \
+  --output table || echo "repository not found"

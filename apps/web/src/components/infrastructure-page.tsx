@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatAgo } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { ClusterEvent, KubernetesStatus, Namespace, ReadyStatus, TelemetryStatus, Workload, WorkloadPod } from "@/lib/types";
+import { clusterModeLabel, venueLabel } from "@/lib/venue";
 
 export function InfrastructurePage() {
   const status = useApi<KubernetesStatus>("/api/v1/kubernetes/status", 5000);
@@ -28,11 +29,16 @@ export function InfrastructurePage() {
       <PageHeader
         kicker="Source: Kubernetes"
         title="Infrastructure"
-        description="Read-only view of the local cluster. Simulated production-01 nodes are not shown here."
+        description={
+          live.venue === "aws-dev"
+            ? "Read-only view of the AWS dev cluster. GitOps is the change path. The constrained executor does not target this cluster."
+            : "Read-only view of the local cluster. Simulated production-01 nodes are not shown here."
+        }
       />
       <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Fact label="Environment" value={venueLabel(live)} />
         <Fact label="Cluster" value={live.cluster} />
-        <Fact label="Mode" value={live.mode === "local-kubernetes" ? "Local Kubernetes" : "Unavailable"} />
+        <Fact label="Mode" value={clusterModeLabel(live.mode)} />
         <div className="border border-border bg-card px-3 py-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Connectivity</div>
           <div className="mt-1">

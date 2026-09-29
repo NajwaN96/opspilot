@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatAgo, formatDuration, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { Cluster, Incident, KubernetesStatus, Service, TelemetrySnapshot, TelemetryStatus, Workload } from "@/lib/types";
+import { venueLabel } from "@/lib/venue";
 
 export function OverviewDashboard() {
   const clusters = useApi<Cluster[]>("/api/v1/clusters", 4000);
@@ -126,7 +127,7 @@ function EnvironmentStrip({
   return (
     <div className="mb-3 space-y-2">
       <div className="grid gap-2 border border-border bg-card px-3 py-2 text-sm sm:grid-cols-4">
-        <Field label="Environment" value="LOCAL" />
+        <Field label="Environment" value={venueLabel(status)} />
         <Field label="Cluster" value={status?.cluster ?? "opspilot-dev"} />
         <div>
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Kubernetes</div>

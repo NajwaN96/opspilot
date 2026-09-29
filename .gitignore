@@ -26,3 +26,17 @@ infra/kubeconfig
 # Editor
 .idea/
 .vscode/
+
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+infra/terraform/environments/dev/dev.auto.tfvars

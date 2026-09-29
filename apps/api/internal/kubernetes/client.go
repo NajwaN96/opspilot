@@ -231,9 +231,12 @@ func (c *Client) baseStatus() model.KubernetesStatus {
 	if len(c.namespaces) > 0 {
 		primary = c.namespaces[0]
 	}
+	mode, venue, label := Classify(c.cluster)
 	return model.KubernetesStatus{
 		Cluster:      c.cluster,
-		Mode:         "local-kubernetes",
+		Mode:         mode,
+		Venue:        venue,
+		VenueLabel:   label,
 		Namespace:    primary,
 		Namespaces:   append([]string{}, c.namespaces...),
 		Connectivity: "connected",

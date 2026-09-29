@@ -1,0 +1,15 @@
+# Copy to dev.auto.tfvars. That file is gitignored.
+# Replace every placeholder before cloud-plan. Do not commit the copy.
+
+aws_region         = "REPLACE_ME"
+allowed_account_id = "000000000000"
+allowed_regions    = ["REPLACE_ME"]
+environment        = "dev"
+api_cidrs          = ["203.0.113.10/32"]
+
+# Optional overrides. Defaults are the portfolio footprint.
+# kubernetes_version = "1.35"
+# instance_type      = "t3.medium"
+# node_min           = 1
+# node_desired       = 1
+# node_max           = 2

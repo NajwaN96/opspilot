@@ -23,6 +23,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { useApi } from "@/lib/use-api";
 import { formatAgo } from "@/lib/format";
 import type { Cluster, Incident, KubernetesStatus } from "@/lib/types";
+import { clusterModeLabel, venueLabel } from "@/lib/venue";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -97,7 +98,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLinks pathname={pathname} activeIncidents={activeIncidents} />
         </div>
         <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-          Local development. Kubernetes access is read-only.
+          {venueLabel(live) === "AWS DEV"
+            ? "AWS dev is observe-only here. GitOps changes that cluster."
+            : "Local development. Kubernetes discovery is read-only."}
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -107,7 +110,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">Local</span>
+              <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{venueLabel(live)}</span>
               <span className="truncate font-mono text-sm">{live?.cluster ?? "opspilot-dev"}</span>
               <StatusBadge value={live?.connectivity ?? "disconnected"} />
               <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">{live?.namespace ?? "demo-shop"}</span>
@@ -119,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="ml-auto hidden items-center gap-2 text-[11px] text-muted-foreground md:flex">
             <Activity className="size-3.5" aria-hidden />
-            <span className="font-mono uppercase">{live?.mode === "local-kubernetes" ? "Local Kubernetes" : "Unavailable"}</span>
+            <span className="font-mono uppercase">{clusterModeLabel(live?.mode)}</span>
           </div>
         </header>
         <main className="min-h-0 flex-1 overflow-auto">

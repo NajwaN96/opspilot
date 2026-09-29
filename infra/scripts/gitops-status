@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Show the OpsPilot Argo CD application. Read-only.
+set -euo pipefail
+
+command -v kubectl >/dev/null
+kubectl -n argocd get application opspilot-demo -o jsonpath='{.metadata.name}{" "}{.status.sync.status}{" "}{.status.health.status}{"\n"}'
+kubectl -n demo-shop get deploy
+kubectl -n opspilot-system get deploy

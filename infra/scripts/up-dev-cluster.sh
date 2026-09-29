@@ -55,8 +55,7 @@ import_image grafana/grafana:11.3.1
 import_image otel/opentelemetry-collector:0.115.1
 import_image jaegertracing/all-in-one:1.62.0
 
-kubectl apply -f "$ROOT/infra/kubernetes/observability.yaml"
-kubectl apply -f "$ROOT/infra/kubernetes/demo-shop.yaml"
+kubectl apply -k "$ROOT/gitops/overlays/local"
 kubectl --request-timeout=30s -n demo-shop rollout restart deployment/storefront deployment/checkout-api deployment/payment-api deployment/orders-api deployment/inventory-api deployment/traffic
 kubectl --request-timeout=30s -n opspilot-system rollout restart deployment/prometheus
 kubectl --request-timeout=30s -n opspilot-system rollout status deployment/prometheus deployment/otel-collector deployment/jaeger deployment/alertmanager deployment/grafana --timeout=180s

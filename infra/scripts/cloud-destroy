@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Destroy only the OpsPilot dev stack. Requires two explicit flags.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/preflight.sh
+source "$ROOT/infra/scripts/lib/preflight.sh"
+cloud_preflight destroy
+
+echo "destroy target:"
+echo "  vpc, public subnets, internet gateway, route tables"
+echo "  eks cluster opspilot-aws-dev and its managed node group"
+echo "  cluster and node IAM roles"
+echo "  ecr repository opspilot-demo"
+echo "untagged or unowned resources are not deleted"
+
+# Load balancers created by a Service of type LoadBalancer can block the VPC.
+# Delete only balancers that carry the OpsPilot dev tag.
+python3 - << 'PY'
+import json, subprocess, sys
+raw = subprocess.check_output(["aws", "resourcegroupstaggingapi", "get-resources",
+    "--resource-type-filters", "elasticloadbalancing:loadbalancer",
+    "--tag-filters", "Key=Project,Values=OpsPilot", "Key=Environment,Values=dev"], text=True)
+data = json.loads(raw)
+arns = [item["ResourceARN"] for item in data.get("ResourceTagMappingList", [])]
+for arn in arns:
+    if ":loadbalancer/net/" not in arn and ":loadbalancer/app/" not in arn:
+        continue
+    print("deleting tagged load balancer", arn)
+    subprocess.check_call(["aws", "elbv2", "delete-load-balancer", "--load-balancer-arn", arn])
+if not arns:
+    print("no OpsPilot dev load balancers")
+PY
+
+STACK="$(cloud_stack_dir)"
+cd "$STACK"
+tofu init -input=false
+tofu destroy -input=false -auto-approve
+echo "destroy submitted for opspilot-aws-dev"

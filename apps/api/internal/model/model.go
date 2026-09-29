@@ -311,6 +311,8 @@ type ExperimentCatalog struct {
 type KubernetesStatus struct {
 	Cluster           string     `json:"cluster"`
 	Mode              string     `json:"mode"`
+	Venue             string     `json:"venue,omitempty"`
+	VenueLabel        string     `json:"venueLabel,omitempty"`
 	Namespace         string     `json:"namespace"`
 	Namespaces        []string   `json:"namespaces"`
 	Connectivity      string     `json:"connectivity"`

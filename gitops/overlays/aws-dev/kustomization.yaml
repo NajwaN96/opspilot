@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  # Placeholder registry. argocd-bootstrap and the runbook replace this with the
+  # account ECR hostname after the repository exists. ecr.invalid cannot be pulled.
+  - name: opspilot-demo
+    newName: ecr.invalid/opspilot-demo
+labels:
+  - pairs:
+      opspilot.io/environment: aws-dev
+    includeSelectors: false
+replicas:
+  - name: payment-api
+    count: 1

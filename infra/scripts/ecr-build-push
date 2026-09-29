@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Build the demo image tags and push them to the opspilot-demo repository.
+# Refuses to run until the repository exists and the account guard passes.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/preflight.sh
+source "$ROOT/infra/scripts/lib/preflight.sh"
+cloud_preflight apply
+
+REGION="$(aws_configured_region)"
+ACCOUNT="$(aws_caller_account)"
+REGISTRY="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
+REPO="${REGISTRY}/opspilot-demo"
+
+aws ecr describe-repositories --repository-names opspilot-demo >/dev/null
+aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+
+docker build -t "$REPO:0.3.0" -t "$REPO:1.4.2" -t "$REPO:1.5.0" -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
+docker build -t "$REPO:1.5.0-bad" --build-arg BAKED_FAULT=degraded -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
+docker build -t "$REPO:1.6.0-bad" --build-arg BAKED_FAULT=canarybad -f "$ROOT/apps/demo/Dockerfile" "$ROOT/apps/demo"
+
+for tag in 0.3.0 1.4.2 1.5.0 1.5.0-bad 1.6.0-bad; do
+  docker push "$REPO:$tag"
+done
+echo "pushed $REPO"
+echo "point gitops/overlays/aws-dev at this registry before Argo sync"

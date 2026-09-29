@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Scale payment-api off Git, show OutOfSync, then sync back to the Git replica count.
+# The change is one extra replica of the demo Deployment. Nothing else is edited.
+set -euo pipefail
+
+command -v kubectl >/dev/null
+APP="${OPSPILOT_ARGO_APP:-opspilot-demo}"
+NS="${OPSPILOT_DEMO_NAMESPACE:-demo-shop}"
+
+before="$(kubectl -n "$NS" get deploy payment-api -o jsonpath='{.spec.replicas}')"
+echo "git-managed replicas before drift: $before"
+kubectl -n argocd patch application "$APP" --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
+kubectl -n "$NS" scale deploy/payment-api --replicas="$((before + 1))"
+sleep 5
+kubectl -n argocd get application "$APP" -o jsonpath='sync={.status.sync.status} health={.status.health.status}{"\n"}'
+echo "drift replicas: $(kubectl -n "$NS" get deploy payment-api -o jsonpath='{.spec.replicas}')"
+
+if command -v argocd >/dev/null; then
+  argocd app sync "$APP" --prune=false
+else
+  kubectl -n argocd patch application "$APP" --type merge -p '{"operation":{"initiatedBy":{"username":"opspilot-drift-demo"},"sync":{"prune":false}}}'
+fi
+
+kubectl -n "$NS" rollout status deploy/payment-api --timeout=180s
+after="$(kubectl -n "$NS" get deploy payment-api -o jsonpath='{.spec.replicas}')"
+echo "replicas after sync: $after"
+if [[ "$after" != "$before" ]]; then
+  echo "reconciliation did not restore ${before} replicas" >&2
+  exit 1
+fi
+kubectl -n argocd patch application "$APP" --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":false,"selfHeal":true}}}}'
+echo "self-heal restored"

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Read-only check of the local toolchain and AWS caller. Creates nothing.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/aws.sh
+source "$ROOT/infra/scripts/lib/aws.sh"
+
+echo "opspilot cloud doctor"
+echo "environment target: dev"
+echo "cluster target: opspilot-aws-dev"
+command -v tofu >/dev/null && tofu version | head -1 || echo "OpenTofu: missing"
+command -v aws >/dev/null && aws --version || echo "AWS CLI: missing"
+command -v kubectl >/dev/null && kubectl version --client --output=yaml 2>/dev/null | awk '/gitVersion:/ {print "kubectl", $2; exit}' || true
+command -v kustomize >/dev/null && echo "kustomize $(kustomize version)" || echo "kustomize: missing"
+
+if ! aws sts get-caller-identity --output json >/tmp/opspilot-sts.json 2>/tmp/opspilot-sts.err; then
+  echo "AWS caller: no credentials"
+  sed 's/[A-Za-z0-9+/]\{20,\}/<redacted>/g' /tmp/opspilot-sts.err || true
+  rm -f /tmp/opspilot-sts.json /tmp/opspilot-sts.err
+  exit 2
+fi
+
+python3 - << 'PY'
+import json
+data = json.load(open("/tmp/opspilot-sts.json"))
+print("account:", data.get("Account", ""))
+print("arn:", data.get("Arn", ""))
+print("user_id:", data.get("UserId", ""))
+PY
+rm -f /tmp/opspilot-sts.json /tmp/opspilot-sts.err
+
+if region="$(aws_configured_region)"; then
+  echo "region: $region"
+else
+  echo "region: unset"
+fi
+echo "tfvars: $ROOT/infra/terraform/environments/dev/dev.auto.tfvars"
+if [[ -f "$ROOT/infra/terraform/environments/dev/dev.auto.tfvars" ]]; then
+  echo "tfvars file: present"
+else
+  echo "tfvars file: missing (copy dev.auto.tfvars.example)"
+fi

@@ -39,3 +39,27 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  cloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.12.6
+      - name: install kustomize
+        run: |
+          curl -fsSL -o kustomize.tgz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.6.0/kustomize_v5.6.0_linux_amd64.tar.gz
+          tar -xzf kustomize.tgz
+          sudo mv kustomize /usr/local/bin/kustomize
+      - name: tofu fmt and validate
+        working-directory: infra/terraform/environments/dev
+        run: |
+          tofu fmt -check -recursive ../..
+          tofu init -input=false -backend=false
+          tofu validate
+      - name: guardrails, gitops, and secret scan
+        run: |
+          bash infra/scripts/guard_test.sh
+          bash infra/scripts/gitops_render_test.sh
+          bash infra/scripts/security_scan.sh

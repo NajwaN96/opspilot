@@ -28,9 +28,12 @@ func (d Disconnected) Status(context.Context) (model.KubernetesStatus, error) {
 	if cluster == "" {
 		cluster = "opspilot-dev"
 	}
+	_, venue, label := Classify(cluster)
 	return model.KubernetesStatus{
 		Cluster:      cluster,
 		Mode:         "unavailable",
+		Venue:        venue,
+		VenueLabel:   label,
 		Namespace:    d.Namespace,
 		Namespaces:   namespaces,
 		Connectivity: "disconnected",

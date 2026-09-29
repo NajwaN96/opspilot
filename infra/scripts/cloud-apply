@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Apply a previously written dev plan. Refuses to run without explicit approval.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/preflight.sh
+source "$ROOT/infra/scripts/lib/preflight.sh"
+cloud_preflight apply
+
+STACK="$(cloud_stack_dir)"
+cd "$STACK"
+[[ -f tfplan ]] || {
+  echo "cloud guard: no tfplan. Run cloud-plan first." >&2
+  exit 1
+}
+tofu apply -input=false tfplan
+rm -f tfplan
+echo "applied opspilot-aws-dev"

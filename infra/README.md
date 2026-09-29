@@ -16,7 +16,7 @@ Development credentials are `opspilot` / `opspilot` on `127.0.0.1:5432`. They ar
 infra/scripts/up-dev-cluster.sh
 ```
 
-That creates k3d cluster `opspilot-dev` (one server, no agents, k3s v1.31.4) and applies `infra/kubernetes/demo-shop.yaml`.
+That creates k3d cluster `opspilot-dev` (one server, no agents, k3s v1.31.4) and applies `gitops/overlays/local`.
 
 Namespaces:
 

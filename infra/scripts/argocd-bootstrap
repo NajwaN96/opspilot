@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Install a pinned Argo CD release into the current kube context and apply the OpsPilot app.
+# The admin password is printed once from the cluster secret and is not written to Git.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/preflight.sh
+source "$ROOT/infra/scripts/lib/preflight.sh"
+cloud_preflight apply
+
+CONTEXT="$(kubectl config current-context)"
+case "$CONTEXT" in
+  *opspilot-aws-dev*) ;;
+  *)
+    echo "cloud guard: kube context ${CONTEXT} is not opspilot-aws-dev" >&2
+    exit 1
+    ;;
+esac
+
+REPO="${OPSPILOT_GITOPS_REPO:-}"
+[[ -n "$REPO" && "$REPO" != *"example/opspilot"* ]] || {
+  echo "cloud guard: set OPSPILOT_GITOPS_REPO to the Git URL Argo CD can read" >&2
+  exit 1
+}
+
+ARGO_VERSION="${OPSPILOT_ARGO_VERSION:-v3.5.3}"
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -n argocd -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGO_VERSION}/manifests/install.yaml"
+kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+
+tmp="$(mktemp)"
+sed "s#https://github.com/example/opspilot#${REPO}#" \
+  "$ROOT/gitops/argocd/applications/opspilot-demo.yaml" >"$tmp"
+kubectl apply -f "$tmp"
+rm -f "$tmp"
+echo "Argo CD is installed in namespace argocd"
+echo "port-forward: kubectl -n argocd port-forward svc/argocd-server 8443:443"
+echo "initial admin password is the argocd-initial-admin-secret data.password field"
+echo "do not commit that secret"

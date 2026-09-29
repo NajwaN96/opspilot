@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Format, validate, and plan the dev stack. Does not apply.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=lib/preflight.sh
+source "$ROOT/infra/scripts/lib/preflight.sh"
+cloud_preflight plan
+
+STACK="$(cloud_stack_dir)"
+cd "$STACK"
+tofu fmt -check -recursive "$ROOT/infra/terraform"
+tofu init -input=false
+tofu validate
+tofu plan -input=false -out=tfplan
+echo "plan written to $STACK/tfplan"
+echo "review the plan, then set OPSPILOT_CLOUD_APPROVED=yes before cloud-apply"

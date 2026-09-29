@@ -4,7 +4,7 @@ Kubernetes reliability control plane.
 
 Production incidents are still reconstructed by hand: a deploy lands, latency moves, someone pastes logs into a channel, and a rollback waits on a person who has standing cluster-admin access. OpsPilot is the control plane for that loop. It is meant to detect a change, correlate it with telemetry, explain the likely cause, propose one constrained action, require a human when the policy says so, execute only that action, and verify recovery.
 
-This repository is a local control plane. PostgreSQL stores operational state, a read-only client discovers workloads on a local Kubernetes cluster, and demo-shop emits real Prometheus metrics and OpenTelemetry traces. A deterministic rule can open an incident from that telemetry. An evidence snapshot can be sent to a configured OpenAI investigator, which may recommend a semantic action and cannot execute it. `INC-142` still uses a simulated rollback. A detected incident can approve one real rollback: `demo-shop/payment-api` from `1.5.0-bad` to `1.4.2`. Nothing here talks to a cloud account.
+This repository is a local control plane plus a guarded AWS dev path. PostgreSQL stores operational state, a read-only client discovers workloads on a local Kubernetes cluster, and demo-shop emits real Prometheus metrics and OpenTelemetry traces. A deterministic rule can open an incident from that telemetry. An evidence snapshot can be sent to a configured OpenAI investigator, which may recommend a semantic action and cannot execute it. `INC-142` still uses a simulated rollback. A detected incident can approve one real rollback: `demo-shop/payment-api` from `1.5.0-bad` to `1.4.2`, and only on the local cluster `opspilot-dev`. The AWS stack in `infra/terraform` is not applied by local development. `cloud-apply` refuses to run until the account, region, and an explicit approval flag match.
 
 ## What it is
 
@@ -181,7 +181,18 @@ npm install
 npm run dev
 ```
 
-The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api`, `/health`, and `/ready` to the API. No account is required. Kubernetes discovery uses the local kubeconfig and only lists `demo-shop`.
+The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api`, `/health`, and `/ready` to the API. No account is required. Kubernetes discovery uses the local kubeconfig and only lists `demo-shop`. The header shows `LOCAL` for `opspilot-dev` and `AWS DEV` for `opspilot-aws-dev`.
+
+## Cloud dev path
+
+OpenTofu under `infra/terraform/environments/dev` describes a small EKS cluster named `opspilot-aws-dev`: a VPC with public subnets and no NAT gateway, one managed node group, and an ECR repository for `opspilot-demo`. GitOps lives in `gitops/`. Argo CD is installed only by `infra/scripts/argocd-bootstrap` after approval. The runbook is [docs/runbooks/phase-7-cloud.md](docs/runbooks/phase-7-cloud.md).
+
+```bash
+infra/scripts/cloud-doctor
+infra/scripts/cloud-plan
+```
+
+`cloud-plan` does not create resources. `cloud-apply` and `cloud-destroy` require `OPSPILOT_CLOUD_APPROVED=yes`, and destroy also requires `OPSPILOT_CLOUD_DESTROY=yes`. The investigator has no AWS client. The constrained executor still accepts only `opspilot-dev`.
 
 Useful environment variables are listed in [.env.example](.env.example). None are required for the defaults above.
 

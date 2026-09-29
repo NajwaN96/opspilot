@@ -375,6 +375,8 @@ export interface TelemetryStatus {
 export interface KubernetesStatus {
   cluster: string;
   mode: string;
+  venue?: string;
+  venueLabel?: string;
   namespace: string;
   namespaces: string[];
   connectivity: "connected" | "disconnected" | "degraded" | string;
