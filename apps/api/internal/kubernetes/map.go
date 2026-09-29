@@ -133,14 +133,14 @@ func ServiceFromWorkload(clusterID string, workload model.Workload) model.Servic
 }
 
 func workloadStatus(desired, ready int) string {
+	if desired == 0 && ready == 0 {
+		return model.StatusIdle
+	}
 	if desired == 0 {
-		return "degraded"
+		return model.StatusDegraded
 	}
 	if ready >= desired {
 		return model.StatusHealthy
-	}
-	if ready == 0 {
-		return model.StatusCritical
 	}
 	return model.StatusDegraded
 }

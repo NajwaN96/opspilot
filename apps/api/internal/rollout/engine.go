@@ -21,11 +21,14 @@ type Cluster interface {
 	PromoteCandidate(ctx context.Context, image, version string) error
 	RemoveCanary(ctx context.Context, token string) error
 	RestoreBaseline(ctx context.Context, token string) error
+	LiveWeight(ctx context.Context) (int, error)
+	StableReady(ctx context.Context) (ready bool, image, version string, err error)
 }
 
 // Meter reads server-built Prometheus windows.
 type Meter interface {
 	VersionWindow(ctx context.Context, service, namespace, version, window string) (telemetry.Snapshot, error)
+	ServiceWindow(ctx context.Context, service, namespace, window string) (telemetry.Snapshot, error)
 }
 
 // Store is the rollout system of record.
@@ -38,6 +41,19 @@ type Store interface {
 	AddEvent(ctx context.Context, id string, event Event) error
 	Events(ctx context.Context, id string) ([]Event, error)
 	RecordAnalysis(ctx context.Context, id string, weight int, gate Analysis) error
+	Latest(ctx context.Context) (Rollout, bool, error)
+}
+
+// Incidents resolves only a recovered payment-api detection incident.
+type Incidents interface {
+	Associated(ctx context.Context, since time.Time) (IncidentRef, bool, error)
+	Recoverable(ctx context.Context, since time.Time) ([]IncidentRef, error)
+	ResolveRecovered(ctx context.Context, id, rolloutID, state string) (bool, error)
+}
+
+// Alerts reads Alertmanager. It cannot create silences.
+type Alerts interface {
+	Firing(ctx context.Context) ([]string, error)
 }
 
 // Advisor may recommend a semantic action. It cannot mutate a cluster.
@@ -46,13 +62,15 @@ type Advisor interface {
 }
 
 type Engine struct {
-	Cluster  Cluster
-	Meter    Meter
-	Store    Store
-	Advisor  Advisor
-	Token    string
-	Counters *Counters
-	Now      func() time.Time
+	Cluster   Cluster
+	Meter     Meter
+	Store     Store
+	Advisor   Advisor
+	Token     string
+	Counters  *Counters
+	Incidents Incidents
+	Alerts    Alerts
+	Now       func() time.Time
 }
 
 func (e *Engine) now() time.Time {
@@ -135,21 +153,39 @@ func (e *Engine) Approve(ctx context.Context, id, action string) (View, error) {
 // Tick advances observation, analysis, and an already-approved mutation.
 func (e *Engine) Tick(ctx context.Context) error {
 	item, ok, err := e.Store.Active(ctx)
-	if err != nil || !ok {
+	if err != nil {
 		return err
 	}
-	switch item.State {
-	case StatePending:
-		return e.pending(ctx, item)
-	case StateRunning:
-		return e.observe(ctx, item)
-	case StatePromoting:
-		return e.promote(ctx, item)
-	case StateRolling:
-		return e.abort(ctx, item)
-	default:
-		return nil
+	if ok {
+		if err := e.reconcile(ctx, item); err != nil {
+			return err
+		}
+		item, ok, err = e.Store.Active(ctx)
+		if err != nil {
+			return err
+		}
 	}
+	if ok {
+		switch item.State {
+		case StatePending:
+			if err := e.pending(ctx, item); err != nil {
+				return err
+			}
+		case StateRunning:
+			if err := e.observe(ctx, item); err != nil {
+				return err
+			}
+		case StatePromoting:
+			if err := e.promote(ctx, item); err != nil {
+				return err
+			}
+		case StateRolling:
+			if err := e.abort(ctx, item); err != nil {
+				return err
+			}
+		}
+	}
+	return e.recoverIncidents(ctx)
 }
 
 func (e *Engine) pending(ctx context.Context, item Rollout) error {
@@ -369,7 +405,6 @@ func (e *Engine) Reset(ctx context.Context) error {
 		return err
 	}
 	item.State = StateAborted
-	item.Weight = 0
 	item.Verification = "demo reset"
 	item.UpdatedAt = e.now()
 	if err := e.Store.Save(ctx, item); err != nil {
@@ -387,11 +422,18 @@ func (e *Engine) View(ctx context.Context, id string) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	return View{Rollout: item, Events: events}, nil
+	return View{Rollout: e.present(ctx, item), Events: events}, nil
 }
 
 func (e *Engine) List(ctx context.Context) ([]Rollout, error) {
-	return e.Store.List(ctx)
+	items, err := e.Store.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i] = e.present(ctx, items[i])
+	}
+	return items, nil
 }
 
 func (e *Engine) Active(ctx context.Context) (bool, error) {

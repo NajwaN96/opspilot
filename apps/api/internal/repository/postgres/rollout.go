@@ -34,7 +34,7 @@ func (s *Store) Active(ctx context.Context) (rollout.Rollout, bool, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT `+rolloutColumns+`
 		FROM rollouts
-		WHERE state IN ('PENDING', 'RUNNING', 'ANALYZING', 'AWAITING_APPROVAL', 'PROMOTING', 'ROLLING_BACK')
+		WHERE state IN ('PENDING', 'RUNNING', 'ANALYZING', 'AWAITING_APPROVAL', 'PROMOTING', 'ROLLING_BACK', 'NEEDS_ATTENTION')
 		ORDER BY created_at DESC LIMIT 1
 	`)
 	item, err := scanRollout(row)
@@ -71,6 +71,18 @@ func (s *Store) List(ctx context.Context) ([]rollout.Rollout, error) {
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) Latest(ctx context.Context) (rollout.Rollout, bool, error) {
+	row := s.pool.QueryRow(ctx, `SELECT `+rolloutColumns+` FROM rollouts ORDER BY created_at DESC LIMIT 1`)
+	item, err := scanRollout(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return rollout.Rollout{}, false, nil
+	}
+	if err != nil {
+		return rollout.Rollout{}, false, err
+	}
+	return item, true, nil
 }
 
 func (s *Store) Save(ctx context.Context, item rollout.Rollout) error {

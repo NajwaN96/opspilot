@@ -28,7 +28,7 @@ func proxyAllowed(namespace, service, method, path string) bool {
 	case namespace == "demo-shop" && service == "checkout-api" && method == http.MethodPost:
 		return path == "/internal/canary"
 	case namespace == "opspilot-system" && service == "alertmanager" && method == http.MethodGet:
-		return path == "/-/ready"
+		return path == "/-/ready" || path == "/api/v2/alerts"
 	case namespace == "opspilot-system" && service == "grafana" && method == http.MethodGet:
 		return path == "/api/health"
 	default:

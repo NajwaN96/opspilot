@@ -67,6 +67,26 @@ func TestWorkloadMapping(t *testing.T) {
 	}
 }
 
+func TestZeroReplicasAreIdle(t *testing.T) {
+	zero := int32(0)
+	one := int32(1)
+	idle := WorkloadFromDeployment(appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "payment-api-canary", Namespace: "demo-shop"},
+		Spec:       appsv1.DeploymentSpec{Replicas: &zero},
+	}, nil, time.Now())
+	if idle.Status != model.StatusIdle || idle.Desired != 0 || idle.Ready != 0 {
+		t.Fatalf("idle %#v", idle)
+	}
+	down := WorkloadFromDeployment(appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "payment-api", Namespace: "demo-shop"},
+		Spec:       appsv1.DeploymentSpec{Replicas: &one},
+		Status:     appsv1.DeploymentStatus{ReadyReplicas: 0},
+	}, nil, time.Now())
+	if down.Status != model.StatusDegraded {
+		t.Fatalf("active without ready pods is %s", down.Status)
+	}
+}
+
 func TestEventMapping(t *testing.T) {
 	event := EventFrom(corev1.Event{
 		ObjectMeta:     metav1.ObjectMeta{Name: "payment.1", Namespace: "demo-shop", UID: "uid-1"},

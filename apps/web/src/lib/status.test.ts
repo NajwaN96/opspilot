@@ -12,6 +12,8 @@ describe("statusTone", () => {
     expect(statusTone("investigating")).toBe("warn");
     expect(statusTone("SEV-3")).toBe("info");
     expect(statusTone("rolled-back")).toBe("neutral");
+    expect(statusTone("idle")).toBe("neutral");
+    expect(statusTone("degraded")).toBe("warn");
   });
 });
 

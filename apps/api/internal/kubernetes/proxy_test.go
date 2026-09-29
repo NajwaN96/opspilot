@@ -15,6 +15,7 @@ func TestProxyAllowlist(t *testing.T) {
 		{"demo-shop", "payment-api", http.MethodPost, "/internal/fault"},
 		{"demo-shop", "checkout-api", http.MethodPost, "/internal/canary"},
 		{"opspilot-system", "alertmanager", http.MethodGet, "/-/ready"},
+		{"opspilot-system", "alertmanager", http.MethodGet, "/api/v2/alerts"},
 		{"opspilot-system", "grafana", http.MethodGet, "/api/health"},
 		{"opspilot-system", "prometheus", http.MethodGet, "/api/v1/rules"},
 	}
@@ -36,6 +37,8 @@ func TestProxyAllowlist(t *testing.T) {
 		{"demo-shop", "checkout-api", http.MethodGet, "/internal/canary"},
 		{"demo-shop", "checkout-api", http.MethodPost, "/internal/canary/extra"},
 		{"opspilot-system", "alertmanager", http.MethodPost, "/api/v2/silences"},
+		{"opspilot-system", "alertmanager", http.MethodPost, "/api/v2/alerts"},
+		{"opspilot-system", "alertmanager", http.MethodGet, "/api/v2/silences"},
 		{"opspilot-system", "grafana", http.MethodGet, "/api/datasources"},
 	}
 	for _, item := range denied {

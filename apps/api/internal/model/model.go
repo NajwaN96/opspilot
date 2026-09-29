@@ -7,6 +7,7 @@ const (
 	StatusHealthy  = "healthy"
 	StatusDegraded = "degraded"
 	StatusCritical = "critical"
+	StatusIdle     = "idle"
 )
 
 // Incident workflow states.

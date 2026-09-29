@@ -171,6 +171,8 @@ For a real investigation, set `OPSPILOT_AI_PROVIDER=openai` and `OPSPILOT_AI_API
 
 Grafana is anonymous and in-cluster at `http://grafana.opspilot-system:3000` (host port 3481 when the dev port-forward is running). Alertmanager is `http://alertmanager.opspilot-system:9093` (host port 3482). Neither UI can change a rollout. The canary gate is 20 requests, 5% errors, 300ms p95, and a Ready candidate, measured with a server-built 2 minute window. Stages wait at least 45 seconds. `POST /api/v1/lab/payment-api/canary/good` and `/bad` are refused in production and accept no image or namespace.
 
+A finished rollout keeps its last evaluated stage weight. Live canary traffic is read from the `payment-routing` ConfigMap, and a scaled-to-zero canary is `idle`, not degraded. `ABORTED` means the failed candidate was removed and stable `1.4.2` verified healthy. `SUCCEEDED` means `1.5.0` was promoted and verified. `FAILED` means the rollout could not safely finish. `NEEDS_ATTENTION` means the controller refused to guess. A payment-api detection incident is resolved only after that rollout is terminal, the candidate is idle, detection has already recorded telemetry recovery, and the current Prometheus window is healthy. Alertmanager firing state is shown as-is; OpsPilot labels it recovering only when live canary traffic is already 0.
+
 Terminal two:
 
 ```bash
@@ -241,3 +243,4 @@ runbooks     payment-api rollback and reliability degradation
 - [0017 — Progressive delivery](docs/adr/0017-progressive-delivery.md)
 - [0018 — SLO-gated canary](docs/adr/0018-slo-gated-canary.md)
 - [0019 — AI versus the rollout gate](docs/adr/0019-ai-rollout-authority.md)
+- [0020 — Rollout state ownership](docs/adr/0020-rollout-state-ownership.md)

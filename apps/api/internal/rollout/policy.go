@@ -76,7 +76,7 @@ func nextWeight(weight int) (int, bool) {
 
 func activeState(state string) bool {
 	switch state {
-	case StatePending, StateRunning, StateAnalyzing, StateAwaiting, StatePromoting, StateRolling:
+	case StatePending, StateRunning, StateAnalyzing, StateAwaiting, StatePromoting, StateRolling, StateAttention:
 		return true
 	default:
 		return false

@@ -17,6 +17,13 @@ interface Rollout {
   candidateVersion: string;
   state: string;
   weight: number;
+  stageWeight: number;
+  liveWeight: number;
+  liveWeightKnown: boolean;
+  candidateActivity?: string;
+  incidentId?: string;
+  incidentStatus?: string;
+  alerts?: { name: string; alertmanager: string; interpretation: string; note?: string }[];
   analysis: string;
   proposalAction: string;
   aiAction: string;
@@ -90,14 +97,23 @@ function RolloutDetail({
   const view = detail.data ?? item;
   const events = view.events ?? [];
   const gateKnown = view.analysis === "PASS" || view.analysis === "FAIL" || view.analysis === "INSUFFICIENT_DATA";
+  const terminal = ["SUCCEEDED", "ABORTED", "FAILED", "NEEDS_ATTENTION"].includes(view.state);
+  const stage = view.stageWeight || view.weight;
+  const approved = events.some((event) => event.title === "Human approved");
+  const executed = events.some((event) => event.title === "Candidate removed" || event.title === "Candidate promoted");
+  const stableHealthy = view.verification.includes("on ");
   return (
     <div className="grid gap-3">
       <Panel title={`${view.id} · ${view.service}`}>
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Status" value={view.state} />
-          <Field label="Stable" value={view.stableVersion} />
-          <Field label="Candidate" value={view.candidateVersion} />
-          <Field label="Traffic to candidate" value={`${view.weight}%`} />
+          <Field label={terminal ? "Last evaluated stage" : "Current stage"} value={`${stage}%`} />
+          <Field label="Live canary traffic" value={view.liveWeightKnown ? `${view.liveWeight}%` : "unknown"} />
+          <Field label="Candidate" value={`${view.candidateVersion} — ${activityLabel(view.candidateActivity)}`} />
+          <Field label="Stable" value={`${view.stableVersion}${stableHealthy ? " — healthy" : ""}`} />
+          <Field label="SLO gate" value={view.analysis || "waiting"} />
+          <Field label="Remediation" value={approved && executed ? "approved + executed" : approved ? "approved" : "not executed"} />
+          <Field label="Incident" value={view.incidentId ? `${view.incidentId} ${view.incidentStatus}` : "none"} />
         </dl>
       </Panel>
       <div className="grid gap-3 lg:grid-cols-2">
@@ -121,6 +137,16 @@ function RolloutDetail({
           ) : null}
           {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
           {view.verification ? <p className="mt-3 text-sm text-muted-foreground">Verification: {view.verification}</p> : null}
+          {view.alerts && view.alerts.length > 0 ? (
+            <ul className="mt-3 grid gap-2">
+              {view.alerts.filter((alert) => alert.alertmanager === "firing" || alert.interpretation === "recovering").map((alert) => (
+                <li key={alert.name} className="text-xs text-muted-foreground">
+                  <span className="font-mono text-foreground">{alert.name}</span> {alert.alertmanager} · {alert.interpretation}
+                  {alert.note ? ` — ${alert.note}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </Panel>
         <Panel title="AI investigator recommendation" action={<span className="text-[11px] uppercase tracking-wide text-sky-200">Not a gate</span>}>
           <p className="text-sm text-muted-foreground">The model may recommend continue, promote, or abort. A failing SLO gate still rejects promotion.</p>
@@ -148,6 +174,13 @@ function RolloutDetail({
       </Panel>
     </div>
   );
+}
+
+function activityLabel(value?: string): string {
+  if (value === "idle") return "inactive";
+  if (value === "ready") return "ready";
+  if (value === "unavailable") return "unavailable";
+  return "unknown";
 }
 
 function Field({ label, value }: { label: string; value: string }) {

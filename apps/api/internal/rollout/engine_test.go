@@ -17,6 +17,8 @@ type fakeCluster struct {
 	ready          bool
 	desired        int
 	weight         int
+	weightErr      error
+	stableReady    bool
 	promotes       int
 	removes        int
 }
@@ -53,14 +55,34 @@ func (f *fakeCluster) RemoveCanary(context.Context, string) error {
 func (f *fakeCluster) RestoreBaseline(context.Context, string) error {
 	f.image, f.version = release.GoodImage, release.GoodVersion
 	f.desired = 0
+	f.weight = 0
+	f.stableReady = true
 	return nil
 }
+func (f *fakeCluster) LiveWeight(context.Context) (int, error) {
+	if f.weightErr != nil {
+		return 0, f.weightErr
+	}
+	return f.weight, nil
+}
+func (f *fakeCluster) StableReady(context.Context) (bool, string, string, error) {
+	return f.stableReady, f.image, f.version, nil
+}
 
-type fakeMeter struct{ samples map[string]telemetry.Snapshot }
+type fakeMeter struct {
+	samples map[string]telemetry.Snapshot
+	service telemetry.Snapshot
+}
 
 func (f fakeMeter) VersionWindow(_ context.Context, _, _, version, _ string) (telemetry.Snapshot, error) {
 	if sample, ok := f.samples[version]; ok {
 		return sample, nil
+	}
+	return telemetry.Snapshot{Available: false}, nil
+}
+func (f fakeMeter) ServiceWindow(context.Context, string, string, string) (telemetry.Snapshot, error) {
+	if f.service.Available || f.service.Requests > 0 {
+		return f.service, nil
 	}
 	return telemetry.Snapshot{Available: false}, nil
 }
@@ -132,6 +154,14 @@ func (m *memRollouts) Events(_ context.Context, id string) ([]Event, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]Event(nil), m.events[id]...), nil
+}
+func (m *memRollouts) Latest(context.Context) (Rollout, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.order) == 0 {
+		return Rollout{}, false, nil
+	}
+	return m.items[m.order[len(m.order)-1]], true, nil
 }
 func (m *memRollouts) RecordAnalysis(context.Context, string, int, Analysis) error { return nil }
 

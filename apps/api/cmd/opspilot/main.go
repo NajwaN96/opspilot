@@ -143,6 +143,12 @@ func main() {
 		Counters: rollout.NewCounters(),
 		Advisor:  canaryAdvisor{provider: provider},
 	}
+	if pg != nil {
+		canary.Incidents = pg
+	}
+	if kubeClient != nil {
+		canary.Alerts = kubeClient
+	}
 	if kubeClient != nil && pg != nil {
 		api.Rollouts = canary
 		svc.SetRolloutGuards(func(ctx context.Context) error {

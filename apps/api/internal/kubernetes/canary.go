@@ -2,7 +2,9 @@ package kubernetes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -195,6 +197,80 @@ func (c *Client) ScaleCanary(ctx context.Context, replicas int) error {
 	dep.Spec.Replicas = &count
 	_, err = c.clientset.AppsV1().Deployments(release.Namespace).Update(ctx, dep, metav1.UpdateOptions{})
 	return err
+}
+
+// LiveWeight reads the payment-routing ConfigMap. A missing map means no canary traffic.
+func (c *Client) LiveWeight(ctx context.Context) (int, error) {
+	cm, err := c.clientset.CoreV1().ConfigMaps(release.Namespace).Get(ctx, release.RoutingConfigMap, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	raw := "0"
+	if cm.Data != nil && cm.Data["weight"] != "" {
+		raw = cm.Data["weight"]
+	}
+	weight, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("routing weight is not allow-listed")
+	}
+	switch weight {
+	case 0, 5, 25, 50, 100:
+		return weight, nil
+	default:
+		return 0, fmt.Errorf("routing weight is not allow-listed")
+	}
+}
+
+// StableReady reports whether payment-api is Ready on its current image.
+func (c *Client) StableReady(ctx context.Context) (bool, string, string, error) {
+	dep, err := c.clientset.AppsV1().Deployments(release.Namespace).Get(ctx, release.Deployment, metav1.GetOptions{})
+	if err != nil {
+		return false, "", "", err
+	}
+	container, err := paymentContainer(dep)
+	if err != nil {
+		return false, "", "", err
+	}
+	version := dep.Spec.Template.Labels["app.kubernetes.io/version"]
+	desired := int32(1)
+	if dep.Spec.Replicas != nil {
+		desired = *dep.Spec.Replicas
+	}
+	ready := desired > 0 && dep.Status.ReadyReplicas == desired && dep.Status.UpdatedReplicas == desired && dep.Status.AvailableReplicas == desired
+	return ready, container.Image, version, nil
+}
+
+// Firing returns alert names currently active in Alertmanager. It does not create silences.
+func (c *Client) Firing(ctx context.Context) ([]string, error) {
+	code, body, err := c.ReadProxy(ctx, "opspilot-system", "alertmanager", 9093, "/api/v2/alerts", nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != 200 {
+		return nil, fmt.Errorf("alertmanager alerts returned %d", code)
+	}
+	var rows []struct {
+		Labels map[string]string `json:"labels"`
+		Status struct {
+			State string `json:"state"`
+		} `json:"status"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, row := range rows {
+		if row.Status.State == "suppressed" {
+			continue
+		}
+		if name := row.Labels["alertname"]; name != "" {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 // WaitCanaryReady waits until the candidate is Ready on the expected image.
