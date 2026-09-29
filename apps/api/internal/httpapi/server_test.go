@@ -29,6 +29,22 @@ func newTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(api.Handler())
 }
 
+func TestCanaryLabRefusedWhenDisabled(t *testing.T) {
+	srv := newTestServer(t)
+	defer srv.Close()
+	for _, path := range []string{"/api/v1/lab/payment-api/canary/good", "/api/v1/lab/payment-api/canary/bad"} {
+		res, err := http.Post(srv.URL+path, "application/json", bytes.NewBufferString(`{"namespace":"kube-system","image":"evil"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusForbidden {
+			t.Fatalf("%s status %d body %s", path, res.StatusCode, body)
+		}
+	}
+}
+
 func TestHealth(t *testing.T) {
 	srv := newTestServer(t)
 	defer srv.Close()

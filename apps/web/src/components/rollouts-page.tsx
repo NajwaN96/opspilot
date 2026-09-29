@@ -89,6 +89,7 @@ function RolloutDetail({
   const detail = useApi<Rollout>(`/api/v1/rollouts/${item.id}`, 3000);
   const view = detail.data ?? item;
   const events = view.events ?? [];
+  const gateKnown = view.analysis === "PASS" || view.analysis === "FAIL" || view.analysis === "INSUFFICIENT_DATA";
   return (
     <div className="grid gap-3">
       <Panel title={`${view.id} · ${view.service}`}>
@@ -108,7 +109,7 @@ function RolloutDetail({
             <Field label="Candidate requests" value={view.requests ? String(Math.round(view.requests)) : "—"} />
             <Field label="Candidate error" value={view.requests ? formatPercent(view.errorRate * 100) : "—"} />
             <Field label="Candidate p95" value={view.p95 ? formatLatency(view.p95 * 1000) : "—"} />
-            <Field label="Stable error / p95" value={`${view.stableErrorRate ? formatPercent(view.stableErrorRate * 100) : "—"} / ${view.stableP95 ? formatLatency(view.stableP95 * 1000) : "—"}`} />
+            <Field label="Stable error / p95" value={`${gateKnown ? formatPercent(view.stableErrorRate * 100) : "—"} / ${gateKnown ? formatLatency(view.stableP95 * 1000) : "—"}`} />
           </dl>
           <p className="mt-3 text-sm">Proposal: <span className="font-mono">{view.proposalAction || "none yet"}</span></p>
           {view.state === "AWAITING_APPROVAL" && view.proposalAction ? (
