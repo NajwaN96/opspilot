@@ -181,7 +181,7 @@ npm install
 npm run dev
 ```
 
-The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api`, `/health`, and `/ready` to the API. No account is required. Kubernetes discovery uses the local kubeconfig and only lists `demo-shop`. The header shows `LOCAL` for `opspilot-dev` and `AWS DEV` for `opspilot-aws-dev`.
+The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api`, `/health`, and `/ready` to the API. No account is required. Kubernetes discovery uses the local kubeconfig and only lists `demo-shop`. The header shows `LOCAL — LIVE` for `opspilot-dev` and `AWS — PLAN ONLY` for the unapplied EKS design. The infrastructure page does not show a full AWS account id.
 
 ## Cloud dev path
 

@@ -98,9 +98,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLinks pathname={pathname} activeIncidents={activeIncidents} />
         </div>
         <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-          {venueLabel(live) === "AWS DEV"
-            ? "AWS dev is observe-only here. GitOps changes that cluster."
-            : "Local development. Kubernetes discovery is read-only."}
+          {venueLabel(live) === "AWS — PLAN ONLY"
+            ? "EKS is plan-only. This console is not a cloud deployment."
+            : "Local k3d is live. Kubernetes discovery is read-only. AWS is plan-only."}
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

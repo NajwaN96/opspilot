@@ -6,7 +6,7 @@ import { ErrorBlock, LoadingBlock, PageHeader, Panel } from "@/components/states
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatAgo } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
-import type { ClusterEvent, KubernetesStatus, Namespace, ReadyStatus, TelemetryStatus, Workload, WorkloadPod } from "@/lib/types";
+import type { CloudPortfolio, ClusterEvent, KubernetesStatus, Namespace, ReadyStatus, TelemetryStatus, Workload, WorkloadPod } from "@/lib/types";
 import { clusterModeLabel, venueLabel } from "@/lib/venue";
 
 export function InfrastructurePage() {
@@ -17,6 +17,7 @@ export function InfrastructurePage() {
   const events = useApi<ClusterEvent[]>("/api/v1/kubernetes/events", 5000);
   const telemetry = useApi<TelemetryStatus>("/api/v1/telemetry/status", 5000);
   const ready = useApi<ReadyStatus>("/ready", 5000);
+  const cloud = useApi<CloudPortfolio>("/api/v1/cloud/status", 15000);
 
   if (status.loading && !status.data) return <LoadingBlock label="Reading cluster" />;
   if (!status.data) return <ErrorBlock message={status.error ?? "Cluster status unavailable"} onRetry={() => void status.reload()} />;
@@ -29,12 +30,23 @@ export function InfrastructurePage() {
       <PageHeader
         kicker="Source: Kubernetes"
         title="Infrastructure"
-        description={
-          live.venue === "aws-dev"
-            ? "Read-only view of the AWS dev cluster. GitOps is the change path. The constrained executor does not target this cluster."
-            : "Read-only view of the local cluster. Simulated production-01 nodes are not shown here."
-        }
+        description="Live Kubernetes is local k3d. The Amazon EKS design stays plan-only and is not deployed. The constrained executor cannot target opspilot-aws-dev."
       />
+      <Panel title="Cloud" className="mb-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Fact label="AWS account" value={cloud.data?.accountState === "connected" ? "Connected" : "Not connected"} />
+          <Fact label="Account mask" value={cloud.data?.accountMasked || "—"} />
+          <Fact label="AWS region" value={cloud.data?.region || "—"} />
+          <Fact label="Cloud deployment" value={cloud.data?.cloudDeployment || "PLAN ONLY"} />
+          <Fact label="Kubernetes runtime" value="LOCAL k3d" />
+          <Fact label="Paid cloud resources" value={cloud.data?.paidCloudResources || "BLOCKED"} />
+          <Fact label="Intentional AWS infrastructure spend" value={cloud.data?.intentionalInfrastructureSpend || "$0"} />
+          <Fact label="EKS" value="plan-only" />
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Intentional spend is the infrastructure OpsPilot is allowed to create. It is not a bill from AWS. Alerts do not stop resources by themselves, and credits are not permission to deploy EKS.
+        </p>
+      </Panel>
       <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Fact label="Environment" value={venueLabel(live)} />
         <Fact label="Cluster" value={live.cluster} />

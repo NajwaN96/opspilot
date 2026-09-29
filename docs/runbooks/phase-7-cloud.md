@@ -26,7 +26,7 @@ flowchart LR
   push --> argo[Argo CD]
   git --> argo
   argo --> shop[demo-shop and observability]
-  shop --> ops[OpsPilot reads AWS DEV]
+  shop --> ops[OpsPilot labels AWS as plan only]
 ```
 
 ## Prerequisites
@@ -90,7 +90,7 @@ infra/scripts/gitops-status
 
 Prometheus, the collector, Jaeger, Grafana, and Alertmanager come from the same base as the local cluster. Reach them with `kubectl -n opspilot-system port-forward`. Do not add a load balancer.
 
-Point the local OpsPilot API at the EKS kubeconfig with `OPSPILOT_K8S_CLUSTER=opspilot-aws-dev` when you want the console to label the data `AWS DEV`. Leave the cluster name unset to stay on local k3d. The executor still refuses `opspilot-aws-dev`.
+Leave `OPSPILOT_K8S_CLUSTER` unset so the console stays on local k3d and shows `LOCAL — LIVE`. Do not point the API at `opspilot-aws-dev` to imitate a deployment. The infrastructure page reads `GET /api/v1/cloud/status`, which masks the account id and always reports EKS as plan-only. The executor still refuses `opspilot-aws-dev`.
 
 ## Drift
 

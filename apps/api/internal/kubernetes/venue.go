@@ -5,9 +5,9 @@ package kubernetes
 func Classify(cluster string) (mode, venue, label string) {
 	switch cluster {
 	case "opspilot-aws-dev":
-		return "eks", "aws-dev", "AWS DEV"
+		return "eks", "aws-dev", "AWS — PLAN ONLY"
 	case "", "opspilot-dev":
-		return "local-kubernetes", "local", "LOCAL"
+		return "local-kubernetes", "local", "LOCAL — LIVE"
 	default:
 		return "unknown", "unknown", "UNKNOWN"
 	}

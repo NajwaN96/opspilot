@@ -84,4 +84,18 @@ if grep -R -n 'OPSPILOT_PAID_CLOUD_OVERRIDE=yes' "$ROOT/infra/terraform" "$ROOT/
   exit 1
 fi
 
+if OPSPILOT_CLOUD_APPROVED=yes OPSPILOT_PAID_CLOUD_OVERRIDE= bash "$ROOT/infra/scripts/cloud-apply" >/tmp/apply-out 2>/tmp/apply-err; then
+  echo "approval bypassed the zero-cost guard" >&2
+  exit 1
+fi
+if ! grep -q "refusing deployment" /tmp/apply-err; then
+  echo "cloud-apply did not refuse for cost" >&2
+  cat /tmp/apply-err >&2
+  exit 1
+fi
+if grep -q "tofu apply" /tmp/apply-out /tmp/apply-err; then
+  echo "cloud-apply reached tofu" >&2
+  exit 1
+fi
+
 echo "guard tests passed"

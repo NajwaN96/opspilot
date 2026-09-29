@@ -372,6 +372,18 @@ export interface TelemetryStatus {
   traces: string;
 }
 
+export interface CloudPortfolio {
+  accountState: "connected" | "not-connected" | string;
+  accountMasked?: string;
+  region?: string;
+  authentication: string;
+  cloudDeployment: string;
+  kubernetesRuntime: string;
+  paidCloudResources: string;
+  intentionalInfrastructureSpend: string;
+  eks: string;
+}
+
 export interface KubernetesStatus {
   cluster: string;
   mode: string;
