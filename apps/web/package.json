@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3461 -H 0.0.0.0",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
