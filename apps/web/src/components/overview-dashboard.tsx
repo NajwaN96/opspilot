@@ -75,15 +75,17 @@ export function OverviewDashboard() {
           ))}
         </div>
       ) : null}
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricTile label="Cluster health" value={health.state} hint={cluster.kubernetesVersion} tone={health.state} />
+      <div className="surface-card mb-5 grid grid-cols-1 overflow-hidden rounded-xl sm:grid-cols-2 xl:grid-cols-5">
+        <MetricTile index={0} label="Cluster health" value={health.state} hint={cluster.kubernetesVersion} tone={health.state} />
         <MetricTile
+          index={1}
           label="Active incidents"
           value={String(health.activeIncidents)}
           hint={health.activeIncidents === 1 ? "SEV-2 open" : "Open right now"}
           tone={health.activeIncidents > 0 ? "critical" : "healthy"}
         />
         <MetricTile
+          index={2}
           label="SLO compliance"
           value={`${health.servicesWithinSLO} / ${health.servicesTotal}`}
           hint={`${formatPercent(health.sloCompliance)} average`}
@@ -91,13 +93,14 @@ export function OverviewDashboard() {
           progressTone={sloRatio >= 100 ? "good" : "warn"}
         />
         <MetricTile
+          index={3}
           label="Services"
           value={`${health.servicesHealthy} / ${health.servicesTotal}`}
-          hint="Healthy services"
+          hint="Healthy"
           progress={healthyRatio}
           progressTone={healthyRatio >= 100 ? "good" : "warn"}
         />
-        <MetricTile label="Deployments today" value={String(health.deploymentsToday)} hint="Last 24 hours" />
+        <MetricTile index={4} label="Deployments today" value={String(health.deploymentsToday)} hint="Last 24 hours" />
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.85fr)]">
         <Panel
@@ -124,15 +127,17 @@ export function OverviewDashboard() {
             <ul>
               {active.map((incident) => (
                 <li key={incident.id} className="border-b border-border last:border-b-0">
-                  <Link href={`/incidents/${incident.id}`} className="block px-4 py-3 transition-colors duration-150 hover:bg-[#f8fafc]">
+                  <Link href={`/incidents/${incident.id}`} className="block px-4 py-3 transition-[background-color,transform] duration-150 hover:bg-[#f8fafc]" title={incident.title}>
                     <div className="flex items-center gap-2">
                       <StatusBadge value={incident.severity} />
-                      <StatusBadge value={incident.status} />
                       <span className="ml-auto font-mono text-[11px] text-muted-foreground">{incident.id}</span>
                     </div>
                     <span className="mt-2 block text-sm font-medium text-foreground">{incident.title}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {incident.serviceName} · {formatDuration(incident.durationSec * 1000)}
+                    <span className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">
+                        {incident.serviceName} · {formatDuration(incident.durationSec * 1000)}
+                      </span>
+                      <StatusBadge value={incident.status} />
                     </span>
                   </Link>
                 </li>
@@ -212,12 +217,19 @@ function paymentLine(payment?: TelemetrySnapshot | null): string {
   return `${payment.requestRate.toFixed(2)} req/s · ${formatPercent(payment.errorRate * 100)} errors · p95 ${formatLatency(payment.p95LatencyMs)}`;
 }
 
+function integrationHint(state: string) {
+  if (state === "connected") return "Samples are arriving from this source.";
+  if (state === "disconnected") return "The control plane cannot reach this source.";
+  if (state === "failed") return "The source reported a failure.";
+  return "No samples in this window. This is not treated as a cluster failure.";
+}
+
 function Integration({ label, value, detail }: { label: string; value?: string; detail?: string }) {
   const state = value === "connected" ? "connected" : value === "unavailable" || !value ? "unavailable" : value;
   return (
     <div>
       <div className="text-[12px] font-medium text-foreground">{label}</div>
-      <div className="mt-1">
+      <div className="mt-1" title={integrationHint(state)}>
         <StatusBadge value={state} />
       </div>
       {detail ? <p className="mt-1 font-mono text-[12px] text-muted-foreground">{detail}</p> : null}
@@ -272,7 +284,16 @@ function WorkloadTable({ workloads, connectivity, message }: { workloads?: Workl
   );
 }
 
+const metricEdges = [
+  "",
+  "border-t sm:border-t-0 sm:border-l",
+  "border-t xl:border-t-0 xl:border-l",
+  "border-t sm:border-l xl:border-t-0",
+  "border-t xl:border-t-0 xl:border-l",
+];
+
 function MetricTile({
+  index,
   label,
   value,
   hint,
@@ -280,6 +301,7 @@ function MetricTile({
   progress,
   progressTone = "good",
 }: {
+  index: number;
   label: string;
   value: string;
   hint: string;
@@ -296,7 +318,7 @@ function MetricTile({
           ? "text-status-success"
           : "text-foreground";
   return (
-    <div className="surface-card rounded-xl px-4 py-3">
+    <div className={cn("border-border px-4 py-3.5", metricEdges[index])}>
       <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</div>
       <div className={cn("mt-2 text-[28px] font-semibold capitalize tracking-tight tabular-nums", valueTone)}>{value}</div>
       {progress != null ? (

@@ -195,13 +195,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           collapsed ? "w-[72px]" : "w-[236px]",
         )}
       >
-        <div className={cn("flex items-center gap-2 px-3 py-3.5", collapsed && "flex-col px-2")}>
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-white text-[13px] font-semibold text-primary shadow-[var(--elevation-card)]" aria-hidden>
-            Op
-          </div>
-          {collapsed ? null : (
+        <div className={cn("flex items-center gap-2 px-3 pt-4 pb-3", collapsed && "flex-col px-2")}>
+          {collapsed ? (
+            <div className="text-[13px] font-semibold tracking-tight text-foreground">Op</div>
+          ) : (
             <div className="min-w-0 flex-1">
-              <div className="text-[14px] font-semibold tracking-tight">OpsPilot</div>
+              <div className="text-[15px] font-semibold tracking-tight">OpsPilot</div>
               <div className="truncate text-[11px] text-muted-foreground">Reliability control plane</div>
             </div>
           )}
