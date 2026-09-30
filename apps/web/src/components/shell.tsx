@@ -9,8 +9,12 @@ import {
   Boxes,
   FlaskConical,
   Gauge,
+  BookOpen,
+  Compass,
   LayoutDashboard,
   Menu,
+  Network,
+  Shield,
   Rocket,
   Server,
   Split,
@@ -29,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/developer-portal", label: "Developer Portal", icon: Compass },
   { href: "/services", label: "Services", icon: Boxes },
   { href: "/incidents", label: "Incidents", icon: Siren },
   { href: "/deployments", label: "Deployments", icon: Rocket },
@@ -36,6 +41,9 @@ const items = [
   { href: "/slos", label: "SLOs", icon: Gauge },
   { href: "/infrastructure", label: "Infrastructure", icon: Server },
   { href: "/reliability-lab", label: "Reliability Lab", icon: FlaskConical },
+  { href: "/runbooks", label: "Runbooks", icon: BookOpen },
+  { href: "/architecture", label: "Architecture", icon: Network },
+  { href: "/security", label: "Security", icon: Shield },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -96,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="text-sm font-semibold tracking-tight">OpsPilot</div>
           <div className="text-[11px] text-muted-foreground">Reliability control plane</div>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col py-2">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2">
           <NavLinks pathname={pathname} activeIncidents={activeIncidents} />
         </div>
         <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">

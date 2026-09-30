@@ -45,3 +45,4 @@ infra/terraform/environments/dev/dev.auto.tfvars
 infra/aws-zero-cost/function/site/
 infra/aws-zero-cost/dist/
 infra/aws-zero-cost/plan.json
+generated/

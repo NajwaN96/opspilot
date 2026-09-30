@@ -30,6 +30,12 @@ export function ServiceDetail({ id }: { id: string }) {
         description={svc.description}
         actions={<StatusBadge value={svc.status} />}
       />
+      <p className="mb-3 text-sm text-muted-foreground">
+        <Link className="hover:underline" href={`/developer-portal/services/${svc.name}`}>Service contract</Link>
+        {" · "}
+        <Link className="hover:underline" href={svc.name === "payment-api" ? "/runbooks/payment-api-high-error-rate" : "/runbooks/dependency-failure"}>Runbook</Link>
+        {fromKubernetes ? " · Discovered from Kubernetes. Contract fields are ownership and SLO, not a second copy of live metrics." : ""}
+      </p>
       <dl className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {fromKubernetes ? (
           <>

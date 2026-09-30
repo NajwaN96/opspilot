@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Check, Circle } from "lucide-react";
 import { EvidencePanel } from "@/components/incident/evidence";
+import { IncidentLifecycle } from "@/components/incident/lifecycle";
 import { RealInvestigation } from "@/components/incident/real-investigation";
 import { StatusBadge } from "@/components/status-badge";
 import { ErrorBlock, LoadingBlock, Panel } from "@/components/states";
@@ -84,6 +85,7 @@ export function Investigation({ id }: { id: string }) {
           </p>
         </div>
       </div>
+      <IncidentLifecycle incident={incident} />
       <p className="mb-3 border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
         Simulated analysis for the current MVP. Approving a rollback records the decision and runs a fake executor. kubectl is not called.
       </p>

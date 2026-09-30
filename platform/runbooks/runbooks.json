@@ -1,0 +1,82 @@
+{
+  "runbooks": [
+    {
+      "id": "payment-api-high-error-rate",
+      "title": "payment-api high error rate",
+      "service": "payment-api",
+      "symptoms": ["Error rate above 5% on the 2 minute Prometheus window", "checkout-api traces fail inside payment-api charge"],
+      "detection": "The detection engine opens an incident when the payment-api error rate crosses the configured threshold. The public AWS sample uses fixed numbers and does not query Prometheus.",
+      "evidence": ["Prometheus error ratio and p95, read by the API", "Jaeger trace from checkout-api into payment-api", "Deployment image and replica counts"],
+      "likelyCauses": ["Bad release 1.5.0-bad", "Dependency timeout that surfaces as payment errors"],
+      "safeInvestigation": ["Read the incident evidence snapshot", "Compare the running image with 1.4.2", "Do not run kubectl from the browser"],
+      "allowedRemediation": ["Human approval of rollback-payment-api on the local cluster only", "The executor may change only demo-shop/payment-api from opspilot-demo:1.5.0-bad to opspilot-demo:1.4.2"],
+      "verification": ["Prometheus error rate back under the threshold", "Canary or bad Deployment no longer serving", "Incident reaches resolved with an audit record"],
+      "escalation": ["If the image is not 1.5.0-bad, do not force the payment rollback. Page the payments owner and keep the executor idle."]
+    },
+    {
+      "id": "payment-api-latency",
+      "title": "payment-api latency degradation",
+      "service": "payment-api",
+      "symptoms": ["p95 above 300ms on the canary gate", "checkout spans marked slow under payment-api"],
+      "detection": "Canary analysis reads Prometheus p95 before promoting 5%, 25%, 50%, and 100%. A latency breach fails the gate.",
+      "evidence": ["Stage error rate and p95 recorded on the rollout", "Trace duration on the charge span"],
+      "likelyCauses": ["Slow dependency inside the candidate image", "Resource saturation on the single lab node"],
+      "safeInvestigation": ["Read the rollout stage, not a raw PromQL box", "Confirm the candidate is payment-api-canary and the stable Deployment is untouched"],
+      "allowedRemediation": ["Abort the canary through the rollout controller", "Do not scale arbitrary Deployments"],
+      "verification": ["Canary traffic returns to 0", "Stable 1.4.2 stays Ready", "Rollout status is ABORTED"],
+      "escalation": ["If stable p95 is also high, stop the experiment and treat it as a capacity issue, not a candidate rollback."]
+    },
+    {
+      "id": "bad-release",
+      "title": "Bad release",
+      "service": "payment-api",
+      "symptoms": ["Image tag 1.5.0-bad", "Error rate climbs after the lab deploy"],
+      "detection": "Reliability Lab action deploys the bad image. Detection opens the incident from Prometheus, not from the button click alone.",
+      "evidence": ["Deployment image", "Prometheus window after the change", "Audit row for the lab action"],
+      "likelyCauses": ["The injected fault in opspilot-demo:1.5.0-bad"],
+      "safeInvestigation": ["Confirm the namespace is demo-shop and the name is payment-api", "Read the recommendation. It must be rollback-payment-api."],
+      "allowedRemediation": ["Approve the constrained rollback. Reset Demo returns the lab to 1.4.2 without deleting the cluster."],
+      "verification": ["Image is opspilot-demo:1.4.2", "Ready replicas 1", "Telemetry recovered, then the incident resolves"],
+      "escalation": ["Public AWS refuses the same POST. Do not retry it there."]
+    },
+    {
+      "id": "canary-failure",
+      "title": "Canary failure",
+      "service": "payment-api",
+      "symptoms": ["Rollout stuck before 100%", "Gate reports error rate above 5% or p95 above 300ms"],
+      "detection": "The canary controller evaluates Prometheus at each weight. A bad candidate cannot promote itself.",
+      "evidence": ["Weights 5, 25, 50, 100", "Gate decision on the rollout record", "payment-routing ConfigMap"],
+      "likelyCauses": ["Candidate image 1.5.0-bad or a bad canary experiment"],
+      "safeInvestigation": ["Read the rollout page. Do not edit the ConfigMap by hand during a gate."],
+      "allowedRemediation": ["Constrained abort that removes the candidate and returns traffic to stable 1.4.2"],
+      "verification": ["Canary replicas idle", "Stable version still 1.4.2", "No residual weight above 0"],
+      "escalation": ["If abort cannot verify stable readiness, leave the rollout NEEDS_ATTENTION and do not guess a second image."]
+    },
+    {
+      "id": "crashloop",
+      "title": "CrashLoopBackOff",
+      "service": "payment-api",
+      "symptoms": ["Pod waiting or restarting", "Ready replicas below desired"],
+      "detection": "Kubernetes discovery shows the workload. OpsPilot does not exec into the container.",
+      "evidence": ["Pod phase and restart count from the read-only client", "Recent Kubernetes events"],
+      "likelyCauses": ["Bad config or image entrypoint", "Missing local image on k3d"],
+      "safeInvestigation": ["Read events and the image reference", "Do not open a shell from the console"],
+      "allowedRemediation": ["No generic delete or exec. For payment-api, only the known rollback image is allowed, and only when policy matches."],
+      "verification": ["Ready replicas match desired", "Restart count stops climbing"],
+      "escalation": ["Any other Deployment stays read-only. Fix it in GitOps and let the local apply path stay human-driven."]
+    },
+    {
+      "id": "dependency-failure",
+      "title": "Dependency failure",
+      "service": "checkout-api",
+      "symptoms": ["Caller error rate rises while the caller image did not change", "Traces fail in a downstream span"],
+      "detection": "Correlate the failing span service with the catalog dependency list.",
+      "evidence": ["Trace parent and child services", "Catalog dependencies", "Downstream SLO or incident"],
+      "likelyCauses": ["payment-api bad release while checkout-api is healthy", "inventory-api unavailable to orders-api"],
+      "safeInvestigation": ["Open the downstream service and its runbook", "Do not restart the caller to hide the downstream fault"],
+      "allowedRemediation": ["Remediate the service that owns the failing span, using that service's allowlist only"],
+      "verification": ["Downstream error rate recovers", "Caller traces succeed without an image change on the caller"],
+      "escalation": ["If the dependency is outside demo-shop, record it and do not widen the executor."]
+    }
+  ]
+}

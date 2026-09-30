@@ -1,6 +1,16 @@
 # OpsPilot
 
-Kubernetes reliability control plane.
+Kubernetes reliability control plane for detection, investigation, approval, and one constrained remediation.
+
+Interview notes: [docs/PORTFOLIO.md](docs/PORTFOLIO.md). Demo script: [docs/DEMO.md](docs/DEMO.md).
+
+| Venue | What it is |
+| --- | --- |
+| Local k3d `opspilot-dev` | Live demo-shop, Prometheus, traces, detection, and the payment-api rollback |
+| Public Lambda | Read-only portfolio console. Sanitized samples. Mutations return 403 |
+| `infra/terraform` | EKS plan only. CI validates it. Nothing applies it |
+
+The developer portal lists the demo-shop catalog, golden-path templates, SLOs, and runbooks. It does not replace Backstage and it does not create cloud infrastructure.
 
 Production incidents are still reconstructed by hand: a deploy lands, latency moves, someone pastes logs into a channel, and a rollback waits on a person who has standing cluster-admin access. OpsPilot is the control plane for that loop. It is meant to detect a change, correlate it with telemetry, explain the likely cause, propose one constrained action, require a human when the policy says so, execute only that action, and verify recovery.
 
@@ -23,7 +33,7 @@ The product loop, end to end:
 5. **Approve** when policy requires a person.
 6. **Remediate** through a constrained executor, not a general admin client.
 7. **Verify** that the symptom returned to baseline.
-8. **Learn** from the closed incident. Not built yet.
+8. **Learn** from the closed incident through the runbook library. The runbook does not execute itself.
 
 `INC-142` still walks that loop on seeded telemetry. A detected `payment-api` incident can walk it on live Prometheus, traces, and the local cluster. The investigator cites a bounded snapshot and may recommend `ROLLBACK_PAYMENT_API`. That recommendation does not choose an image. The rule recommends a rollback only for release `1.5.0-bad`, a person approves it, and the executor changes that one Deployment.
 
@@ -242,8 +252,9 @@ apps/demo    Instrumented demo-shop services
 docs         Architecture and ADRs
 demo         Walkthrough for INC-142
 infra        Cluster, Prometheus, collector, Jaeger
-platform     Executor boundary notes
-runbooks     payment-api rollback and reliability degradation
+platform     Service contract, catalog, and runbook library
+templates    Go, Node.js, and Python golden-path skeletons
+docs/runbooks Operational notes, including the CI/CD runbook
 ```
 
 ## Roadmap
@@ -276,3 +287,4 @@ runbooks     payment-api rollback and reliability degradation
 - [0027 — Zero-cost portfolio path](docs/adr/0027-zero-cost-portfolio-path.md)
 - [0028 — AWS zero-cost portfolio deployment](docs/adr/0028-aws-zero-cost-portfolio.md)
 - [0029 — Secure CI/CD with AWS OIDC](docs/adr/0029-secure-cicd-aws-oidc.md)
+- [0030 — Developer portal and golden paths](docs/adr/0030-developer-portal-golden-paths.md)

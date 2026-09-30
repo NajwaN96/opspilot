@@ -82,9 +82,9 @@ export function AIInvestigator({ incidentId }: { incidentId: string }) {
         <Field label="Model" value={view?.model || "—"} />
         <Field label="Evidence snapshot" value={view?.snapshotVersion ? `v${view.snapshotVersion}` : "—"} />
       </dl>
-      {view?.error ? (
+      {view?.error || view?.status === "unavailable" ? (
         <p className="mt-3 text-sm text-amber-100">
-          AI investigation unavailable. {view.error.startsWith("quota") ? "The OpenAI account has no remaining credits, so this result is not a model investigation." : view.error}
+          AI Investigator Unavailable. {view?.error?.startsWith("quota") ? "The OpenAI account has no remaining credits, so this result is not a model investigation. Detection and approval still run." : view?.error}
         </p>
       ) : null}
       {view?.validation && !view.validation.accepted && (view.validation.errors ?? []).length > 0 ? (

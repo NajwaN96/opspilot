@@ -59,6 +59,9 @@ with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive
     for name in ("handler.py", "catalog.py"):
         archive.write(here / "function" / name, name)
     archive.writestr("release.json", release_meta.dumps(public))
+    platform = here.parents[1] / "platform"
+    for rel in ("catalog/catalog.json", "runbooks/runbooks.json"):
+        archive.write(platform / rel, f"platform/{rel}")
     site = here / "function" / "site"
     for path in site.rglob("*"):
         if path.is_file():

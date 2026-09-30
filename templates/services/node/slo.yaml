@@ -1,0 +1,10 @@
+apiVersion: opspilot.io/v1
+kind: SLO
+metadata:
+  name: __SERVICE_NAME__
+spec:
+  availability: __SLO__
+  latencyMs: 300
+  errorRate: 1.0
+  window: 5m
+  strategy: __STRATEGY__

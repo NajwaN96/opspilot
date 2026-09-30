@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AIInvestigator } from "@/components/incident/ai-investigator";
+import { IncidentLifecycle } from "@/components/incident/lifecycle";
 import { StatusBadge } from "@/components/status-badge";
 import { Panel } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
           {formatDuration(incident.durationSec * 1000)}
         </p>
       </div>
+      <IncidentLifecycle incident={incident} />
       <div className="mb-3 grid gap-2 border border-emerald-400/30 bg-card px-3 py-2 text-sm sm:grid-cols-2 xl:grid-cols-5">
         <Fact label="Incident source" value="Detection Engine" />
         <Fact label="Metrics source" value={incident.metricsSource || "Prometheus"} />

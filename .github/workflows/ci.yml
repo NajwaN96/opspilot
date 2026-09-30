@@ -19,6 +19,7 @@ jobs:
         run: |
           python3 infra/aws-zero-cost/ci_policy.py
           bash infra/scripts/security_scan.sh
+          python3 -m unittest discover -s platform/contract -p 'test_*.py'
 
   api:
     runs-on: ubuntu-latest

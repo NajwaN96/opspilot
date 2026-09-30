@@ -1,0 +1,15 @@
+apiVersion: opspilot.io/v1
+kind: Service
+metadata:
+  name: __SERVICE_NAME__
+spec:
+  owner: __OWNER__
+  runtime: __RUNTIME__
+  repository: generated/services/__SERVICE_NAME__
+  namespace: demo-shop
+  slo:
+    availability: __SLO__
+    latencyMs: 300
+  runbook: __SERVICE_NAME__
+  dependencies: []
+  deploymentStrategy: __STRATEGY__

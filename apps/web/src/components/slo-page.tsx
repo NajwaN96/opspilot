@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { ErrorBlock, LoadingBlock, PageHeader } from "@/components/states";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPercent } from "@/lib/format";
+import { isPortfolioRuntime } from "@/lib/runtime";
 import { useApi } from "@/lib/use-api";
 import type { Service } from "@/lib/types";
 
@@ -19,7 +20,11 @@ export function SloPage() {
       <PageHeader
         kicker="30-day window"
         title="SLOs"
-        description={`${within} of ${services.data.length} services are inside their objective. Budgets are simulated and reset only when the scenario says they do.`}
+        description={
+          isPortfolioRuntime()
+            ? `${within} of ${services.data.length} sample services are inside the labeled objective. Error budget and burn rate here are sanitized examples, not a Prometheus query.`
+            : `${within} of ${services.data.length} records are inside their objective. payment-api's live error rate and p95 are on its service page. Budget remaining is the fraction of the error budget still unused.`
+        }
       />
       <div className="border border-border bg-card">
         <Table>

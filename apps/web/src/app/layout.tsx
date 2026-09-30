@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     default: "OpsPilot",
     template: "%s · OpsPilot",
   },
-  description: "Kubernetes reliability control plane. Local MVP with simulated production data.",
+  description: "Kubernetes reliability control plane. Local lab, read-only AWS portfolio, and plan-only EKS.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

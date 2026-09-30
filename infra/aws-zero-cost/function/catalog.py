@@ -327,6 +327,43 @@ def kubernetes_status() -> dict:
     }
 
 
+def _platform_file(name: str) -> dict:
+    here = Path(__file__).resolve().parent
+    candidates = [here]
+    candidates.extend(here.parents)
+    for base in candidates:
+        path = base / "platform" / name
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    raise FileNotFoundError(name)
+
+
+def platform_catalog() -> dict:
+    data = _platform_file("catalog/catalog.json")
+    return {"source": "service-contract", "venue": "aws-portfolio-demo", "services": data["services"]}
+
+
+def platform_runbooks() -> dict:
+    return _platform_file("runbooks/runbooks.json")
+
+
+def platform_scorecard() -> dict:
+    rows = []
+    for service in platform_catalog()["services"]:
+        spec = service.get("spec") or {}
+        rows.append({
+            "name": (service.get("metadata") or {}).get("name"),
+            "checks": spec.get("checks") or {},
+            "guidance": spec.get("guidance") or {},
+            "source": "service-contract",
+        })
+    return {
+        "source": "service-contract",
+        "note": "PASS, WARNING, and MISSING come from the service contract. They are not a live cluster scan and they are not a numeric score.",
+        "services": rows,
+    }
+
+
 def resolve(method: str, path: str):
     """Return (status, body). Mutations are always refused."""
     if method not in {"GET", "HEAD"}:
@@ -346,6 +383,17 @@ def resolve(method: str, path: str):
         },
         "/api/v1/cloud/status": cloud(),
         "/api/v1/release": release(),
+        "/api/v1/platform/catalog": platform_catalog(),
+        "/api/v1/platform/runbooks": platform_runbooks(),
+        "/api/v1/platform/scorecard": platform_scorecard(),
+        "/api/v1/platform/golden-path": {
+            "mode": "preview",
+            "writes": False,
+            "localWrite": False,
+            "runtimes": ["go", "node", "python"],
+            "strategies": ["rolling", "canary"],
+            "message": "The public portfolio does not write a repository or infrastructure. The preview stays in the browser.",
+        },
         "/api/v1/clusters": [
             {
                 "id": "portfolio-sample",
@@ -426,6 +474,18 @@ def resolve(method: str, path: str):
     }
     if path in exact:
         return 200, exact[path]
+    if path.startswith("/api/v1/platform/catalog/"):
+        name = path.removeprefix("/api/v1/platform/catalog/")
+        for item in platform_catalog()["services"]:
+            if item.get("metadata", {}).get("name") == name:
+                return 200, item
+        return 404, {"error": {"code": "not_found", "message": "service is not in the catalog"}}
+    if path.startswith("/api/v1/platform/runbooks/"):
+        book_id = path.removeprefix("/api/v1/platform/runbooks/")
+        for item in platform_runbooks()["runbooks"]:
+            if item.get("id") == book_id:
+                return 200, item
+        return 404, {"error": {"code": "not_found", "message": "runbook not found"}}
     if path.startswith("/api/v1/services/") and path.endswith("/telemetry"):
         body = telemetry(path.removeprefix("/api/v1/services/").removesuffix("/telemetry"))
         return (200, body) if body else (404, {"error": {"message": "Unknown portfolio service"}})

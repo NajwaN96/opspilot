@@ -1,0 +1,10 @@
+name: __SERVICE_NAME__
+on:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: echo "replace with the runtime test command"

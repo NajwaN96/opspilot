@@ -65,6 +65,25 @@ export function OverviewDashboard() {
           No active incidents. {cluster.name} is clear.
         </div>
       )}
+      <div className="mb-3 grid gap-3 md:grid-cols-3">
+        <Panel title={isPortfolioRuntime() ? "AWS public portfolio" : "Local lab"}>
+          <p className="text-sm text-muted-foreground">
+            {isPortfolioRuntime()
+              ? "This page is a sanitized sample on Lambda. It is not connected to k3d, Prometheus, or the executor."
+              : "k3d opspilot-dev is live. payment-api metrics below are Prometheus. INC-142 remains a simulated incident."}
+          </p>
+        </Panel>
+        <Panel title="Plan only">
+          <p className="text-sm text-muted-foreground">EKS, its node group, and ECR exist as OpenTofu. They are not applied. The paid override stays unset.</p>
+        </Panel>
+        <Panel title="Demo tour">
+          <ol className="list-decimal space-y-1 pl-4 text-sm text-muted-foreground">
+            <li><Link className="hover:underline" href="/developer-portal">Developer portal</Link></li>
+            <li><Link className="hover:underline" href="/slos">SLOs</Link> and <Link className="hover:underline" href="/incidents">incidents</Link></li>
+            <li><Link className="hover:underline" href="/rollouts">Rollouts</Link>, <Link className="hover:underline" href="/architecture">architecture</Link>, <Link className="hover:underline" href="/security">security</Link></li>
+          </ol>
+        </Panel>
+      </div>
       <EnvironmentStrip status={kubernetes.data} telemetry={telemetry.data} payment={payment.data} />
       <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Stat label="Cluster health" value={health.state} hint={cluster.kubernetesVersion} emphasize={health.state} />

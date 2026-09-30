@@ -1,0 +1,216 @@
+{
+  "apiVersion": "opspilot.io/v1",
+  "kind": "ServiceCatalog",
+  "services": [
+    {
+      "apiVersion": "opspilot.io/v1",
+      "kind": "Service",
+      "metadata": {"name": "storefront"},
+      "spec": {
+        "description": "demo-shop edge. Calls checkout-api. Runs in namespace demo-shop from GitOps.",
+        "owner": "demo-shop",
+        "team": "demo-shop",
+        "runtime": "Go",
+        "language": "Go",
+        "repository": "gitops/base/demo-shop.yaml",
+        "environment": "local-live",
+        "namespace": "demo-shop",
+        "version": "1.6.0",
+        "health": "contract",
+        "slo": {"availability": 99.9, "latencyMs": 300, "errorRate": 1.0, "window": "5m"},
+        "dependencies": ["checkout-api"],
+        "runbook": "dependency-failure",
+        "dashboard": "Grafana on the local lab. Not embedded in the public AWS site.",
+        "onCall": "demo-shop primary",
+        "deploymentStrategy": "rolling",
+        "lastDeployment": "GitOps base image opspilot-demo:0.3.0, version label 1.6.0",
+        "reliabilityStatus": "local workload; public AWS shows a sanitized sample only",
+        "checks": {
+          "sloDefined": "PASS",
+          "runbook": "PASS",
+          "owner": "PASS",
+          "healthEndpoint": "PASS",
+          "readinessProbe": "PASS",
+          "metrics": "PASS",
+          "tracing": "PASS",
+          "resourceLimits": "PASS",
+          "ci": "WARNING",
+          "gitops": "PASS",
+          "securityContext": "MISSING"
+        },
+        "guidance": {
+          "ci": "Covered by the monorepo CI and GitOps render, not a service-owned workflow.",
+          "securityContext": "Set runAsNonRoot and a read-only root filesystem before treating this as a production workload."
+        }
+      }
+    },
+    {
+      "apiVersion": "opspilot.io/v1",
+      "kind": "Service",
+      "metadata": {"name": "checkout-api"},
+      "spec": {
+        "description": "Accepts checkout and calls payment-api. The dependency used in the bad-release trace.",
+        "owner": "demo-shop",
+        "team": "checkout",
+        "runtime": "Go",
+        "language": "Go",
+        "repository": "gitops/base/demo-shop.yaml",
+        "environment": "local-live",
+        "namespace": "demo-shop",
+        "version": "2.3.1",
+        "health": "contract",
+        "slo": {"availability": 99.9, "latencyMs": 300, "errorRate": 1.0, "window": "5m"},
+        "dependencies": ["payment-api"],
+        "runbook": "dependency-failure",
+        "dashboard": "Grafana on the local lab. Not embedded in the public AWS site.",
+        "onCall": "checkout primary",
+        "deploymentStrategy": "rolling",
+        "lastDeployment": "GitOps base image opspilot-demo:0.3.0, version label 2.3.1",
+        "reliabilityStatus": "local workload",
+        "checks": {
+          "sloDefined": "PASS",
+          "runbook": "PASS",
+          "owner": "PASS",
+          "healthEndpoint": "PASS",
+          "readinessProbe": "PASS",
+          "metrics": "PASS",
+          "tracing": "PASS",
+          "resourceLimits": "PASS",
+          "ci": "WARNING",
+          "gitops": "PASS",
+          "securityContext": "MISSING"
+        },
+        "guidance": {
+          "ci": "Covered by the monorepo CI and GitOps render, not a service-owned workflow.",
+          "securityContext": "Set runAsNonRoot and a read-only root filesystem before treating this as a production workload."
+        }
+      }
+    },
+    {
+      "apiVersion": "opspilot.io/v1",
+      "kind": "Service",
+      "metadata": {"name": "payment-api"},
+      "spec": {
+        "description": "Charges a checkout. The reliability lab rolls this Deployment between 1.4.2 and 1.5.0-bad, and canaries 1.5.0.",
+        "owner": "payments",
+        "team": "payments",
+        "runtime": "Go",
+        "language": "Go",
+        "repository": "gitops/base/demo-shop.yaml",
+        "environment": "local-live",
+        "namespace": "demo-shop",
+        "version": "1.4.2",
+        "health": "live on local k3d; sample on AWS",
+        "slo": {"availability": 99.9, "latencyMs": 300, "errorRate": 5.0, "window": "2m"},
+        "dependencies": [],
+        "runbook": "payment-api-high-error-rate",
+        "dashboard": "Local Grafana. Prometheus is queried by the API, not by the browser.",
+        "onCall": "payments primary",
+        "deploymentStrategy": "canary",
+        "lastDeployment": "Stable image opspilot-demo:1.4.2. Canary image opspilot-demo:1.5.0 stays scaled to zero until a lab rollout.",
+        "reliabilityStatus": "baseline when the stable Deployment is 1.4.2 and the canary is idle",
+        "checks": {
+          "sloDefined": "PASS",
+          "runbook": "PASS",
+          "owner": "PASS",
+          "healthEndpoint": "PASS",
+          "readinessProbe": "PASS",
+          "metrics": "PASS",
+          "tracing": "PASS",
+          "resourceLimits": "PASS",
+          "ci": "WARNING",
+          "gitops": "PASS",
+          "securityContext": "MISSING"
+        },
+        "guidance": {
+          "ci": "Image builds are local. GitHub CI builds the demo Dockerfile and does not push it to a registry.",
+          "securityContext": "The lab image does not set runAsNonRoot. Golden-path templates do."
+        }
+      }
+    },
+    {
+      "apiVersion": "opspilot.io/v1",
+      "kind": "Service",
+      "metadata": {"name": "orders-api"},
+      "spec": {
+        "description": "Records an order after payment. Present in demo-shop GitOps.",
+        "owner": "demo-shop",
+        "team": "orders",
+        "runtime": "Go",
+        "language": "Go",
+        "repository": "gitops/base/demo-shop.yaml",
+        "environment": "local-live",
+        "namespace": "demo-shop",
+        "version": "1.9.0",
+        "health": "contract",
+        "slo": {"availability": 99.9, "latencyMs": 300, "errorRate": 1.0, "window": "5m"},
+        "dependencies": ["payment-api", "inventory-api"],
+        "runbook": "dependency-failure",
+        "dashboard": "Grafana on the local lab.",
+        "onCall": "orders primary",
+        "deploymentStrategy": "rolling",
+        "lastDeployment": "GitOps base image opspilot-demo:0.3.0, version label 1.9.0",
+        "reliabilityStatus": "local workload",
+        "checks": {
+          "sloDefined": "PASS",
+          "runbook": "PASS",
+          "owner": "PASS",
+          "healthEndpoint": "PASS",
+          "readinessProbe": "PASS",
+          "metrics": "PASS",
+          "tracing": "PASS",
+          "resourceLimits": "PASS",
+          "ci": "WARNING",
+          "gitops": "PASS",
+          "securityContext": "MISSING"
+        },
+        "guidance": {
+          "ci": "Covered by the monorepo CI and GitOps render, not a service-owned workflow.",
+          "securityContext": "Set runAsNonRoot and a read-only root filesystem before treating this as a production workload."
+        }
+      }
+    },
+    {
+      "apiVersion": "opspilot.io/v1",
+      "kind": "Service",
+      "metadata": {"name": "inventory-api"},
+      "spec": {
+        "description": "Stock lookup for demo-shop. A dependency of orders-api.",
+        "owner": "demo-shop",
+        "team": "inventory",
+        "runtime": "Go",
+        "language": "Go",
+        "repository": "gitops/base/demo-shop.yaml",
+        "environment": "local-live",
+        "namespace": "demo-shop",
+        "version": "1.2.4",
+        "health": "contract",
+        "slo": {"availability": 99.9, "latencyMs": 300, "errorRate": 1.0, "window": "5m"},
+        "dependencies": [],
+        "runbook": "dependency-failure",
+        "dashboard": "Grafana on the local lab.",
+        "onCall": "inventory primary",
+        "deploymentStrategy": "rolling",
+        "lastDeployment": "GitOps base image opspilot-demo:0.3.0, version label 1.2.4",
+        "reliabilityStatus": "local workload",
+        "checks": {
+          "sloDefined": "PASS",
+          "runbook": "PASS",
+          "owner": "PASS",
+          "healthEndpoint": "PASS",
+          "readinessProbe": "PASS",
+          "metrics": "PASS",
+          "tracing": "PASS",
+          "resourceLimits": "PASS",
+          "ci": "WARNING",
+          "gitops": "PASS",
+          "securityContext": "MISSING"
+        },
+        "guidance": {
+          "ci": "Covered by the monorepo CI and GitOps render, not a service-owned workflow.",
+          "securityContext": "Set runAsNonRoot and a read-only root filesystem before treating this as a production workload."
+        }
+      }
+    }
+  ]
+}

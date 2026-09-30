@@ -60,6 +60,37 @@ smoke tests, or restore the previous zip
 
 CI does not apply `infra/terraform`. Static AWS access keys are not used. The decision is [ADR 0029](../adr/0029-secure-cicd-aws-oidc.md).
 
+## Developer platform
+
+```mermaid
+flowchart TD
+  portal[Developer portal] --> catalog[Service catalog]
+  portal --> golden[Golden path preview]
+  golden --> templates[Go Node Python templates]
+  catalog --> slo[SLO contract]
+  catalog --> runbook[Runbook]
+  catalog --> git[GitOps manifests]
+  git --> k3d[k3d demo-shop]
+```
+
+The public site renders the same catalog as a contract. It does not write `generated/services`. Local generation refuses the five demo-shop names. See [ADR 0030](../adr/0030-developer-portal-golden-paths.md).
+
+## GitOps
+
+`gitops/base` renders with Kustomize. `gitops/argocd/applications/opspilot-demo.yaml` is an Application for the plan-only AWS overlay. Its source is still `https://github.com/example/opspilot`, and the overlay rewrites the image to `ecr.invalid/opspilot-demo`. Argo CD is not installed in `opspilot-dev`. Installing it and pointing it at that overlay would try to pull an image that does not exist and could disturb the local lab. The manifest stays as documentation of the intended reconcile loop. No Git credential is stored for it.
+
+## Incident and remediation
+
+```mermaid
+flowchart LR
+  detect[Detection] --> evidence[Evidence]
+  evidence --> ai[AI investigator read-only]
+  evidence --> policy[Deterministic policy]
+  policy --> approval[Human approval]
+  approval --> exec[Constrained executor]
+  exec --> verify[Prometheus verification]
+```
+
 ## Today
 
 ```

@@ -29,6 +29,20 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(body["environment"], "aws-portfolio-demo")
         self.assertNotIn("account", body)
 
+    def test_platform_catalog_is_read_only(self):
+        status, body = catalog.resolve("GET", "/api/v1/platform/catalog")
+        self.assertEqual(status, 200)
+        names = {item["metadata"]["name"] for item in body["services"]}
+        self.assertEqual(names, {"storefront", "checkout-api", "payment-api", "orders-api", "inventory-api"})
+        status, body = catalog.resolve("GET", "/api/v1/platform/catalog/payment-api")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["spec"]["deploymentStrategy"], "canary")
+        status, body = catalog.resolve("POST", "/api/v1/platform/golden-path")
+        self.assertEqual(status, 403)
+        status, body = catalog.resolve("GET", "/api/v1/platform/runbooks/bad-release")
+        self.assertEqual(status, 200)
+        self.assertIn("allowedRemediation", body)
+
     def test_catalog_has_no_secret_material(self):
         blob = json.dumps(catalog.resolve("GET", "/api/v1/cloud/status")[1])
         blob += json.dumps(catalog.resolve("GET", "/api/v1/incidents/INC-142")[1])

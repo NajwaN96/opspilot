@@ -7,12 +7,12 @@ import { useApi } from "@/lib/use-api";
 import type { Health, ReleaseInfo } from "@/lib/types";
 
 const localRows = [
-  ["Data source", "In-memory repository. PostgreSQL is the planned replacement."],
-  ["Cluster access", "None. The executor is simulated and does not load a kubeconfig."],
+  ["Data source", "PostgreSQL stores incidents, approvals, and rollouts. Kubernetes discovery is read-only."],
+  ["Cluster", "Local k3d opspilot-dev. EKS is plan-only and is not applied from this console."],
   ["Remediation", "INC-142 stays simulated. A detected incident can approve one real rollback of demo-shop/payment-api from 1.5.0-bad to 1.4.2."],
   ["Policy", "The live action cannot target another namespace or Deployment, and the browser cannot supply an image."],
-  ["AI investigator", "Server-side only. It reads a prepared evidence snapshot and cannot execute. The API key is not shown here."],
-  ["Telemetry", "Metrics, logs, traces, and events on the incident page are simulated."],
+  ["AI investigator", "Server-side only. It reads a prepared evidence snapshot and cannot execute. A missing quota shows AI Investigator Unavailable and leaves detection intact."],
+  ["Telemetry", "payment-api metrics and traces come from Prometheus and Jaeger. The simulated incident keeps its own sample evidence."],
 ];
 
 const portfolioRows = [
@@ -47,6 +47,15 @@ export function SettingsPage() {
           </dl>
         </Panel>
         <div className="grid content-start gap-3">
+        <Panel title="Cost policy">
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">AWS account mode</dt><dd className="font-mono text-xs">FREE</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Public portfolio</dt><dd className="font-mono text-xs">Lambda</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">EKS</dt><dd className="font-mono text-xs">PLAN ONLY</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Paid cloud override</dt><dd className="font-mono text-xs">DISABLED</dd></div>
+          </dl>
+          <p className="mt-2 text-sm text-muted-foreground">Project policy, not an invoice. Cost Explorer is not enabled here, and this page does not show an account id.</p>
+        </Panel>
         <Panel title="Release">
           {release.data ? (
             <dl className="space-y-2 text-sm">
