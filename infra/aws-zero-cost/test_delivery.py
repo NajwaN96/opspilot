@@ -116,6 +116,27 @@ class DeliveryTest(unittest.TestCase):
         delivery.publish_artifact(client, sample_zip())
         self.assertEqual(len(client.updates), 1)
 
+    def test_previous_package_without_release_metadata_can_be_replaced(self):
+        client = Fake()
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("handler.py", "# portfolio handler\n" + ("# pad\n" * 40))
+            archive.writestr("catalog.py", "# portfolio catalog\n" + ("# pad\n" * 40))
+        client.current = buffer.getvalue()
+        delivery.publish_artifact(client, sample_zip())
+        self.assertEqual(len(client.updates), 1)
+
+    def test_new_artifact_must_include_release_metadata(self):
+        client = Fake()
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("handler.py", "# portfolio handler\n" + ("# pad\n" * 40))
+            archive.writestr("catalog.py", "# portfolio catalog\n" + ("# pad\n" * 40))
+        with self.assertRaises(delivery.DeliveryError) as caught:
+            delivery.publish_artifact(client, buffer.getvalue())
+        self.assertIn("artifact is missing release.json", str(caught.exception))
+        self.assertEqual(client.updates, [])
+
     def test_publisher_does_not_publish_versions_or_apply_tofu(self):
         text = Path(delivery.__file__).read_text(encoding="utf-8")
         self.assertNotIn("publish-version", text)

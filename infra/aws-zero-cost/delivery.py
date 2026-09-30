@@ -56,19 +56,23 @@ def check_context(*, account_id: str, region: str, function_name: str, plan: dic
     return reasons
 
 
-def validate_artifact(payload: bytes) -> None:
+def validate_artifact(payload: bytes, *, require_release: bool = True) -> None:
+    label = "artifact" if require_release else "previous package"
     if not isinstance(payload, (bytes, bytearray)) or len(payload) < 200:
-        raise DeliveryError("bad artifact")
+        raise DeliveryError(f"bad {label}")
     if len(payload) > 45_000_000:
         raise DeliveryError("artifact exceeds the direct Lambda upload limit")
     try:
         with zipfile.ZipFile(BytesIO(payload)) as archive:
             names = set(archive.namelist())
     except zipfile.BadZipFile as exc:
-        raise DeliveryError("bad artifact") from exc
-    missing = {"handler.py", "catalog.py", "release.json"} - names
+        raise DeliveryError(f"bad {label}") from exc
+    required = {"handler.py", "catalog.py"}
+    if require_release:
+        required.add("release.json")
+    missing = required - names
     if missing:
-        raise DeliveryError("artifact is missing " + ", ".join(sorted(missing)))
+        raise DeliveryError(f"{label} is missing " + ", ".join(sorted(missing)))
 
 
 def evaluate_smoke(samples: list[tuple[str, str, int, str]]) -> list[str]:
@@ -126,7 +130,9 @@ def publish_artifact(client, payload: bytes) -> None:
         raise DeliveryError("refusing to deploy: " + "; ".join(reasons))
     validate_artifact(payload)
     previous = client.previous_package()
-    validate_artifact(previous)
+    # The package already on Lambda may predate release.json. It still has to
+    # be a real function zip so a failed smoke test can put it back.
+    validate_artifact(previous, require_release=False)
     client.update_package(payload)
     client.wait_until_updated()
     try:
