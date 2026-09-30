@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.22"
+          go-version: "1.27.1"
           cache-dependency-path: apps/api/go.sum
       - name: gofmt
         run: test -z "$(gofmt -l .)"
@@ -129,7 +129,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.22"
+          go-version: "1.27.1"
           cache-dependency-path: apps/api/go.sum
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -137,10 +137,10 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - name: go vulnerability database
-        working-directory: apps/api
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          govulncheck ./...
+          go install golang.org/x/vuln/cmd/govulncheck@v1.4.0
+          (cd apps/api && govulncheck ./...)
+          (cd apps/demo && govulncheck ./...)
       - name: npm audit
         working-directory: apps/web
         run: |

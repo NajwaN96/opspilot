@@ -1,0 +1,8 @@
+title = "OpsPilot"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Recharts dataKey values are chart series names."
+paths = ['''apps/web/src/components/charts\.tsx''']

@@ -137,7 +137,7 @@ Open the incident and choose **Approve & Execute**. The UI walks approval, rollb
 
 ## Running locally
 
-Requirements: Node.js 22, npm, Go 1.22, Docker, k3d, kubectl.
+Requirements: Node.js 22, npm, Go 1.27.1, Docker, k3d, kubectl. The API module asks the toolchain for Go 1.27.1.
 
 PostgreSQL:
 
