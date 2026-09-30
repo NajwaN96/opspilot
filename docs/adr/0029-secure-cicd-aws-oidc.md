@@ -27,7 +27,9 @@ GitHub
   → rollback to the previous zip when verification fails
 ```
 
-Static `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` values are prohibited in workflows and in GitHub secrets. The trust policy uses `StringEquals` on three claims: audience `sts.amazonaws.com`, subject `repo:OWNER/NAME:environment:aws-portfolio`, and ref `refs/heads/main`. There is no `Principal: "*"` and no wildcard repository.
+Static `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` values are prohibited in workflows and in GitHub secrets. The trust policy uses `StringEquals` on three claims: audience `sts.amazonaws.com`, the GitHub subject, and ref `refs/heads/main`. There is no `Principal: "*"` and no wildcard repository.
+
+GitHub includes the owner id and repository id in the OIDC subject (`repo:OWNER@OWNER_ID/NAME@REPO_ID:environment:aws-portfolio`). A name-only subject (`repo:OWNER/NAME:environment:aws-portfolio`) is not what Actions sends, and `sts:AssumeRoleWithWebIdentity` rejects it. The bootstrap reads `sub_claim_prefix` from the repository and refuses to continue if immutable subjects are turned off. The repository is not opted out of that claim.
 
 The role's inline policy allows:
 
@@ -48,7 +50,7 @@ The local lab stays `LOCAL — LIVE`. The public function stays `AWS — PORTFOL
 
 ## Consequences
 
-The deployer role cannot be created until `OPSPILOT_GITHUB_REPOSITORY` is one real `owner/name`. Guessing a repository would let a later occupant of that name assume the role. `scripts/aws-oidc-bootstrap.sh` refuses a wildcard and does not print the account id.
+The deployer role cannot be created until `OPSPILOT_GITHUB_REPOSITORY` is one real `owner/name` and GitHub returns that repository's immutable subject prefix. Guessing a name, or trusting the name without the ids, would let a later occupant of that name assume the role. `scripts/aws-oidc-bootstrap.sh` refuses a wildcard and does not print the account id.
 
 GitHub environment `aws-portfolio` is declared on the deploy job. Required reviewers are a repository setting. They are not assumed to exist on a free private repository. Protection still comes from the main-branch trust, the CI gates, and the role scope.
 

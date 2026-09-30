@@ -66,6 +66,8 @@ export OPSPILOT_GITHUB_REPOSITORY=owner/name
 scripts/aws-oidc-bootstrap.sh
 ```
 
+The script reads GitHub's immutable OIDC subject (`repo:owner@id/name@id`) and writes that exact subject into the role trust, together with audience `sts.amazonaws.com` and ref `refs/heads/main`. A name-only subject cannot assume the role. Leave immutable subjects enabled.
+
 Then set the GitHub Actions variable `OPSPILOT_AWS_ROLE_ARN` to the role ARN. Do not also create an access key. Optional required reviewers on environment `aws-portfolio` are configured in GitHub by an admin. The workflow does not depend on a paid ruleset.
 
 A local package check that does not call AWS:

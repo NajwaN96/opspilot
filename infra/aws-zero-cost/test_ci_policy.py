@@ -77,6 +77,30 @@ class CiPolicyTest(unittest.TestCase):
             ci_policy.render_trust("123456789012", "*/*")
         with self.assertRaises(ValueError):
             ci_policy.render_trust("123", "example-org/opspilot")
+        immutable = ci_policy.render_trust(
+            "123456789012",
+            "example-org/opspilot",
+            subject_prefix="repo:example-org@102930213/opspilot@1397452400",
+        )
+        immutable_sub = immutable["Statement"][0]["Condition"]["StringEquals"][
+            "token.actions.githubusercontent.com:sub"
+        ]
+        self.assertEqual(
+            immutable_sub,
+            "repo:example-org@102930213/opspilot@1397452400:environment:aws-portfolio",
+        )
+        with self.assertRaises(ValueError):
+            ci_policy.render_trust(
+                "123456789012",
+                "example-org/opspilot",
+                subject_prefix="repo:*/*",
+            )
+        with self.assertRaises(ValueError):
+            ci_policy.render_trust(
+                "123456789012",
+                "example-org/opspilot",
+                subject_prefix="example-org/opspilot",
+            )
 
     def test_tracked_state_and_kubeconfig_are_rejected(self):
         found = ci_policy.forbidden_tracked(

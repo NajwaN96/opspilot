@@ -25,6 +25,21 @@ if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo) or "*" in repo or 
     raise SystemExit("BLOCKED: OPSPILOT_GITHUB_REPOSITORY must be one verified owner/name")
 PY
 
+# GitHub includes owner and repository ids in the OIDC subject. A name-only
+# subject cannot assume the role. Do not opt the repository out of that claim.
+subject_json="$(gh api "repos/${OPSPILOT_GITHUB_REPOSITORY}/actions/oidc/customization/sub")"
+subject_prefix="$(python3 - "$subject_json" << 'PY'
+import json, re, sys
+doc = json.loads(sys.argv[1])
+if not doc.get("use_immutable_subject"):
+    raise SystemExit("BLOCKED: GitHub immutable OIDC subjects must stay enabled")
+prefix = doc.get("sub_claim_prefix") or ""
+if not re.fullmatch(r"repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+", prefix) or "*" in prefix:
+    raise SystemExit("BLOCKED: GitHub subject prefix is not a single repository")
+print(prefix)
+PY
+)"
+
 load_aws_session
 identity="$(aws --region us-east-1 --output json sts get-caller-identity)"
 account="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["Account"])' "$identity")"
@@ -56,7 +71,7 @@ fi
 
 trust="$(mktemp)"
 trap 'rm -f "$trust"' EXIT
-ACCOUNT="$account" REPO="${OPSPILOT_GITHUB_REPOSITORY}" TRUST_FILE="$trust" python3 - << PY
+ACCOUNT="$account" REPO="${OPSPILOT_GITHUB_REPOSITORY}" SUBJECT_PREFIX="$subject_prefix" TRUST_FILE="$trust" python3 - << PY
 import json, os, sys
 sys.path.insert(0, "$ROOT/infra/aws-zero-cost")
 import ci_policy
@@ -64,7 +79,11 @@ policy = json.loads(open("$ROOT/infra/aws-zero-cost/iam/github-deployer-policy.j
 reasons = ci_policy.scan_iam_policy(policy)
 if reasons:
     raise SystemExit("BLOCKED: " + "; ".join(reasons))
-rendered = ci_policy.render_trust(os.environ["ACCOUNT"], os.environ["REPO"])
+rendered = ci_policy.render_trust(
+    os.environ["ACCOUNT"],
+    os.environ["REPO"],
+    subject_prefix=os.environ["SUBJECT_PREFIX"],
+)
 open(os.environ["TRUST_FILE"], "w", encoding="utf-8").write(json.dumps(rendered))
 PY
 

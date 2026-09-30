@@ -171,11 +171,20 @@ def scan_iam_policy(policy: dict) -> list[str]:
     return reasons
 
 
-def render_trust(account_id: str, repository: str) -> dict:
+IMMUTABLE_PREFIX_RE = re.compile(r"repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+")
+
+
+def render_trust(account_id: str, repository: str, subject_prefix: str | None = None) -> dict:
     if not re.fullmatch(r"\d{12}", account_id or ""):
         raise ValueError("account id must be 12 digits")
     if not REPO_RE.fullmatch(repository or "") or "*" in repository or ".." in repository.split("/"):
         raise ValueError("repository must be owner/name with no wildcard")
+    if subject_prefix:
+        if not IMMUTABLE_PREFIX_RE.fullmatch(subject_prefix) or "*" in subject_prefix:
+            raise ValueError("immutable subject prefix is not a single repository")
+        base = subject_prefix
+    else:
+        base = f"repo:{repository}"
     return {
         "Version": "2012-10-17",
         "Statement": [
@@ -188,7 +197,7 @@ def render_trust(account_id: str, repository: str) -> dict:
                 "Condition": {
                     "StringEquals": {
                         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                        "token.actions.githubusercontent.com:sub": f"repo:{repository}:environment:aws-portfolio",
+                        "token.actions.githubusercontent.com:sub": f"{base}:environment:aws-portfolio",
                         "token.actions.githubusercontent.com:ref": "refs/heads/main",
                     }
                 },
@@ -214,7 +223,7 @@ def scan(root: Path | None = None) -> list[str]:
         reasons.append("github deployer trust template is missing")
     else:
         trust = trust_path.read_text(encoding="utf-8")
-        if '"Principal": "*"' in trust or '"AWS": "*"' in trust or "__GITHUB_REPOSITORY__" not in trust:
+        if '"Principal": "*"' in trust or '"AWS": "*"' in trust or "__GITHUB_SUBJECT_PREFIX__" not in trust:
             reasons.append("trust template is not restricted to one repository placeholder")
         if "StringLike" in trust:
             reasons.append("trust template must use StringEquals")
