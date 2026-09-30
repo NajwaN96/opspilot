@@ -12,10 +12,11 @@ export function LiveReliability({ serviceId }: { serviceId: string }) {
   const traces = useApi<TraceList>(`/api/v1/services/${serviceId}/traces`, 5000);
   const snap = telemetry.data;
   const available = Boolean(snap?.available);
+  const portfolio = snap?.source === "portfolio-demo" || snap?.dataSource === "portfolio-demo";
 
   return (
     <div className="space-y-3">
-      <Panel title="Live reliability" action={<span className="text-[11px] text-muted-foreground">Source: {available ? "Prometheus" : "unavailable"}</span>}>
+      <Panel title={portfolio ? "Portfolio sample" : "Live reliability"} action={<span className="text-[11px] text-muted-foreground">Source: {portfolio ? "Sanitized sample" : available ? "Prometheus" : "unavailable"}</span>}>
         {!snap || !available ? (
           <p className="text-sm text-muted-foreground">{snap?.message || telemetry.error || "Telemetry unavailable"}</p>
         ) : (
@@ -30,7 +31,11 @@ export function LiveReliability({ serviceId }: { serviceId: string }) {
               <Metric label="P99 latency" value={formatLatency(snap.p99LatencyMs)} />
               <Metric label="Telemetry last updated" value={snap.updated ? formatAgo(snap.updated) : "—"} />
             </dl>
-            <p className="mt-3 text-[11px] text-muted-foreground">Data source: {snap.dataSource}. Window: 1 minute. These numbers are not the seeded INC-142 series.</p>
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              {portfolio
+                ? "Portfolio sample. This is not a live Prometheus scrape and it is not connected to the local cluster."
+                : `Data source: ${snap.dataSource}. Window: 1 minute. These numbers are not the seeded INC-142 series.`}
+            </p>
           </>
         )}
       </Panel>

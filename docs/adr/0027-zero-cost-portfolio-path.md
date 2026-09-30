@@ -16,7 +16,7 @@ Keep local k3d (`opspilot-dev`) as the only running Kubernetes environment. Keep
 
 `cloud-apply`, `ecr-build-push`, and `argocd-bootstrap` refuse when the Terraform tree contains EKS, a managed node group, Fargate, EC2, NAT, Elastic IP, a load balancer, RDS, ECR, or `map_public_ip_on_launch = true`. Refusal stands even if `OPSPILOT_CLOUD_APPROVED=yes`. A separate `OPSPILOT_PAID_CLOUD_OVERRIDE=yes` would bypass the cost check. Nothing in Terraform, CI, or those scripts sets it.
 
-Vercel is the better public home for the Next.js console if a shareable URL is needed later. It is not deployed from this change. The live SRE demonstration stays on local k3d, where GitOps desired state is already `gitops/overlays/local`. Argo CD is not installed on that cluster: the single node is the Phase 6 demo, and an in-cluster Argo install would compete with it. The Argo manifests remain validated and unused until a paid cloud is explicitly chosen.
+A later decision, [ADR 0028](0028-aws-zero-cost-portfolio.md), places the public console on an AWS Lambda function URL. Vercel is not used. The live SRE demonstration stays on local k3d, where GitOps desired state is already `gitops/overlays/local`. Argo CD is not installed on that cluster: the single node is the Phase 6 demo, and an in-cluster Argo install would compete with it. The Argo manifests remain validated and unused until a paid cloud is explicitly chosen.
 
 IAM, the investigator, and the constrained executor are unchanged. The investigator still has no AWS credentials and no Kubernetes write client. `opspilot-aws-dev` is still not a mutation target.
 

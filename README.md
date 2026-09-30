@@ -181,7 +181,7 @@ npm install
 npm run dev
 ```
 
-The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api`, `/health`, and `/ready` to the API. No account is required. Kubernetes discovery uses the local kubeconfig and only lists `demo-shop`. The header shows `LOCAL — LIVE` for `opspilot-dev` and `AWS — PLAN ONLY` for the unapplied EKS design. The infrastructure page does not show a full AWS account id.
+The console listens on [http://127.0.0.1:3461](http://127.0.0.1:3461) and proxies `/api`, `/health`, and `/ready` to the API. No account is required. Kubernetes discovery uses the local kubeconfig and only lists `demo-shop`. The header shows `LOCAL — LIVE` for `opspilot-dev`, `AWS — PLAN ONLY` for the unapplied EKS design, and `AWS — PORTFOLIO DEMO` on the public Lambda build. The infrastructure page does not show a full AWS account id.
 
 ## Cloud dev path
 
@@ -192,7 +192,19 @@ infra/scripts/cost-classify
 infra/scripts/cloud-doctor
 ```
 
-`cost-classify` refuses this stack and does not call AWS. `cloud-plan` does not create resources. `cloud-apply`, `ecr-build-push`, and `argocd-bootstrap` refuse while billable resources are present, even with `OPSPILOT_CLOUD_APPROVED=yes`. The paid override is not enabled. `cloud-destroy` still requires `OPSPILOT_CLOUD_APPROVED=yes` and `OPSPILOT_CLOUD_DESTROY=yes`. The investigator has no AWS client. The constrained executor still accepts only `opspilot-dev`. A public Next.js host such as Vercel can sit in front of the console later; it is not part of this deployment, and Kubernetes stays on local k3d.
+`cost-classify` refuses this stack and does not call AWS. `cloud-plan` does not create resources. `cloud-apply`, `ecr-build-push`, and `argocd-bootstrap` refuse while billable resources are present, even with `OPSPILOT_CLOUD_APPROVED=yes`. The paid override is not enabled. `cloud-destroy` still requires `OPSPILOT_CLOUD_APPROVED=yes` and `OPSPILOT_CLOUD_DESTROY=yes`. The investigator has no AWS client. The constrained executor still accepts only `opspilot-dev`.
+
+## Public AWS portfolio
+
+The shareable console is an AWS Lambda function URL from `infra/aws-zero-cost`, not another host. The current deployment is [https://jcqljkrf25oijz4cryqw7c76lq0wmzhi.lambda-url.us-east-1.on.aws/](https://jcqljkrf25oijz4cryqw7c76lq0wmzhi.lambda-url.us-east-1.on.aws/). It serves the Next.js console and a read-only sanitized API. The banner reads **AWS — PORTFOLIO DEMO**. It is not connected to `opspilot-dev`, PostgreSQL, Prometheus, Jaeger, or EKS. POST routes are refused. EKS remains plan-only under `infra/terraform`.
+
+```bash
+OPSPILOT_ZERO_COST_DEPLOYMENT=yes scripts/aws-zero-cost-preflight.sh
+OPSPILOT_ZERO_COST_DEPLOYMENT=yes scripts/aws-zero-cost-deploy.sh
+scripts/aws-cost-status.sh
+```
+
+Preflight checks the free plan, account suffix `3851`, region `us-east-1`, and an allowlist of Lambda, IAM, and one log group. `OPSPILOT_PAID_CLOUD_OVERRIDE` must stay unset. The decision is [ADR 0028](docs/adr/0028-aws-zero-cost-portfolio.md).
 
 Useful environment variables are listed in [.env.example](.env.example). None are required for the defaults above.
 
@@ -255,3 +267,5 @@ runbooks     payment-api rollback and reliability degradation
 - [0018 — SLO-gated canary](docs/adr/0018-slo-gated-canary.md)
 - [0019 — AI versus the rollout gate](docs/adr/0019-ai-rollout-authority.md)
 - [0020 — Rollout state ownership](docs/adr/0020-rollout-state-ownership.md)
+- [0027 — Zero-cost portfolio path](docs/adr/0027-zero-cost-portfolio-path.md)
+- [0028 — AWS zero-cost portfolio deployment](docs/adr/0028-aws-zero-cost-portfolio.md)

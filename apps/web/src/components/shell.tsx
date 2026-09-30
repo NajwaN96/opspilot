@@ -23,6 +23,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { useApi } from "@/lib/use-api";
 import { formatAgo } from "@/lib/format";
 import type { Cluster, Incident, KubernetesStatus } from "@/lib/types";
+import { isPortfolioRuntime } from "@/lib/runtime";
 import { clusterModeLabel, venueLabel } from "@/lib/venue";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const kubernetes = useApi<KubernetesStatus>("/api/v1/kubernetes/status", 5000);
   const cluster = clusters.data?.find((item) => item.simulated) ?? clusters.data?.[0];
   const live = kubernetes.data;
+  const portfolio = isPortfolioRuntime() || live?.mode === "aws-portfolio-demo";
   const activeIncidents = incidents.data?.filter((incident) => incident.status !== "resolved").length ?? 0;
 
   return (
@@ -98,12 +100,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLinks pathname={pathname} activeIncidents={activeIncidents} />
         </div>
         <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-          {venueLabel(live) === "AWS — PLAN ONLY"
-            ? "EKS is plan-only. This console is not a cloud deployment."
-            : "Local k3d is live. Kubernetes discovery is read-only. AWS is plan-only."}
+          {portfolio
+            ? "Public AWS portfolio. Not connected to k3d or EKS. Mutations stay local."
+            : venueLabel(live) === "AWS — PLAN ONLY"
+              ? "EKS is plan-only. This console is not a cloud deployment."
+              : "Local k3d is live. Kubernetes discovery is read-only. AWS EKS is plan-only."}
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
+        {portfolio ? (
+          <div className="border-b border-sky-300/40 bg-sky-300/10 px-3 py-1.5 text-[11px] font-medium tracking-wide text-sky-100">
+            AWS — PORTFOLIO DEMO. Sanitized sample data. Not live Kubernetes telemetry.
+          </div>
+        ) : null}
         <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
           <Button className="md:hidden" variant="ghost" size="icon" onClick={() => setMenuPath(pathname)} aria-label="Open navigation">
             <Menu />

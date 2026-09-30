@@ -18,7 +18,9 @@ infra/scripts/cost-classify
 
 That command exits non-zero while the billable resources remain. `cloud-apply`, `ecr-build-push`, and `argocd-bootstrap` call the same check and refuse before AWS. `OPSPILOT_CLOUD_APPROVED=yes` does not bypass it. `OPSPILOT_PAID_CLOUD_OVERRIDE` is not set and must not be set for a $0 demonstration.
 
-The steps below describe the paid path only. Do not run them for the portfolio demo. The live demo is local k3d plus `gitops/overlays/local`.
+The steps below describe the paid path only. Do not run them for the portfolio demo. The live reliability lab is local k3d plus `gitops/overlays/local`.
+
+The public AWS console is a different stack, `infra/aws-zero-cost`. It is one Lambda function URL, an execution role that can write only that function's log stream, and a one-day CloudWatch log group. Apply it only through `scripts/aws-zero-cost-deploy.sh` after `OPSPILOT_ZERO_COST_DEPLOYMENT=yes`. That flag does not authorize EKS. `scripts/aws-cost-status.sh` is read-only. Credit emails are not spending caps. See [ADR 0028](../adr/0028-aws-zero-cost-portfolio.md).
 
 ```mermaid
 flowchart LR

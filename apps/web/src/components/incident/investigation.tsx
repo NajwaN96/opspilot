@@ -10,6 +10,7 @@ import { ErrorBlock, LoadingBlock, Panel } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { apiPost } from "@/lib/api";
+import { isPortfolioRuntime } from "@/lib/runtime";
 import { completedSteps, formatClock, formatDuration, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import { useTween } from "@/lib/use-tween";
@@ -161,10 +162,15 @@ export function Investigation({ id }: { id: string }) {
             ) : (
               <p className="text-sm text-muted-foreground">No recommendation.</p>
             )}
-            {incident.recommendation?.allowed && !incident.remediation ? (
+            {incident.recommendation?.allowed && !incident.remediation && !isPortfolioRuntime() ? (
               <Button className="mt-3 w-full" onClick={() => void approve()} disabled={pending}>
                 {pending ? "Recording approval…" : "Approve & Execute"}
               </Button>
+            ) : null}
+            {isPortfolioRuntime() ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Approval is not available on the public AWS portfolio. The constrained executor stays on the local reliability lab.
+              </p>
             ) : null}
             {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
             {incident.remediation ? (

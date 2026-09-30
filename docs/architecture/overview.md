@@ -2,6 +2,30 @@
 
 OpsPilot is a reliability control plane. It sits beside a cluster, not inside it as a privileged controller. `INC-142` analysis and rollback stay simulated. demo-shop metrics, traces, detection, and the payment-api fault are real and local.
 
+## Three environments
+
+```
+AWS PUBLIC PORTFOLIO                         REAL
+Internet -> Lambda function URL
+         -> static console + read-only JSON
+         labeled AWS — PORTFOLIO DEMO
+         sanitized samples, no executor
+
+LOCAL RELIABILITY LAB                        REAL
+Mac -> k3d opspilot-dev
+    -> OpsPilot API, PostgreSQL, demo-shop
+    -> Prometheus, OpenTelemetry, Jaeger
+    -> Grafana, Alertmanager
+    labeled LOCAL — LIVE
+
+AWS EKS ARCHITECTURE                         PLAN ONLY
+OpenTofu under infra/terraform
+    -> EKS opspilot-aws-dev
+    never applied
+```
+
+The public site is not attached to the local cluster. EKS stays unapplied because the portfolio requirement is zero out-of-pocket cost. See [ADR 0028](../adr/0028-aws-zero-cost-portfolio.md).
+
 ## Today
 
 ```

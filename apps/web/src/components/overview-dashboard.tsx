@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatAgo, formatDuration, formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { Cluster, Incident, KubernetesStatus, Service, TelemetrySnapshot, TelemetryStatus, Workload } from "@/lib/types";
+import { isPortfolioRuntime } from "@/lib/runtime";
 import { venueLabel } from "@/lib/venue";
 
 export function OverviewDashboard() {
@@ -34,7 +35,11 @@ export function OverviewDashboard() {
       <PageHeader
         kicker={cluster.name}
         title="Overview"
-        description="Simulated production-01 stays separate from demo-shop. Kubernetes health and payment-api telemetry below come from the local cluster."
+        description={
+          isPortfolioRuntime()
+            ? "Sanitized portfolio sample for the public AWS deployment. These figures are not live telemetry from Kubernetes, Prometheus, Jaeger, or the local lab."
+            : "Simulated production-01 stays separate from demo-shop. Kubernetes health and payment-api telemetry below come from the local cluster."
+        }
       />
       {active.length > 0 ? (
         <div className="mb-3 border border-red-400/40 bg-red-400/10">

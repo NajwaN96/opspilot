@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
+import { isPortfolioRuntime } from "@/lib/runtime";
 
 export function useApi<T>(path: string, refreshMs?: number) {
   const [data, setData] = useState<T | null>(null);
@@ -20,6 +21,8 @@ export function useApi<T>(path: string, refreshMs?: number) {
     }
   }, [path]);
 
+  const refresh = isPortfolioRuntime() ? undefined : refreshMs;
+
   useEffect(() => {
     let active = true;
     const run = async () => {
@@ -36,15 +39,15 @@ export function useApi<T>(path: string, refreshMs?: number) {
       }
     };
     void run();
-    if (!refreshMs) return () => {
+    if (!refresh) return () => {
       active = false;
     };
-    const id = setInterval(() => void run(), refreshMs);
+    const id = setInterval(() => void run(), refresh);
     return () => {
       active = false;
       clearInterval(id);
     };
-  }, [path, refreshMs]);
+  }, [path, refresh]);
 
   return { data, error, loading, reload };
 }

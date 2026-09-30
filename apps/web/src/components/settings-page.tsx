@@ -2,10 +2,11 @@
 
 import { StatusBadge } from "@/components/status-badge";
 import { PageHeader, Panel } from "@/components/states";
+import { isPortfolioRuntime } from "@/lib/runtime";
 import { useApi } from "@/lib/use-api";
 import type { Health } from "@/lib/types";
 
-const rows = [
+const localRows = [
   ["Data source", "In-memory repository. PostgreSQL is the planned replacement."],
   ["Cluster access", "None. The executor is simulated and does not load a kubeconfig."],
   ["Remediation", "INC-142 stays simulated. A detected incident can approve one real rollback of demo-shop/payment-api from 1.5.0-bad to 1.4.2."],
@@ -14,12 +15,22 @@ const rows = [
   ["Telemetry", "Metrics, logs, traces, and events on the incident page are simulated."],
 ];
 
+const portfolioRows = [
+  ["Deployment", "AWS — PORTFOLIO DEMO. A Lambda function URL serves this console and a read-only sample API."],
+  ["Kubernetes", "Not connected. The live lab remains local k3d. EKS stays plan-only and is not applied."],
+  ["Remediation", "Disabled. POST routes return a refusal. The constrained executor is not deployed here."],
+  ["Data", "Deterministic sanitized samples. They are not live Prometheus, Jaeger, PostgreSQL, or kubeconfig output."],
+  ["Secrets", "No AWS credentials, OpenAI key, database URL, or kubeconfig are bundled in this site."],
+];
+
 export function SettingsPage() {
   const health = useApi<Health>("/health", 10000);
+  const portfolio = isPortfolioRuntime();
+  const rows = portfolio ? portfolioRows : localRows;
   return (
     <div>
       <PageHeader
-        kicker="Local MVP"
+        kicker={portfolio ? "AWS — PORTFOLIO DEMO" : "Local MVP"}
         title="Settings"
         description="Read-only description of this environment. There is nothing to save, and no secrets are stored here."
       />

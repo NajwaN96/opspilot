@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatAgo } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import type { CloudPortfolio, ClusterEvent, KubernetesStatus, Namespace, ReadyStatus, TelemetryStatus, Workload, WorkloadPod } from "@/lib/types";
+import { isPortfolioRuntime } from "@/lib/runtime";
 import { clusterModeLabel, venueLabel } from "@/lib/venue";
 
 export function InfrastructurePage() {
@@ -23,6 +24,7 @@ export function InfrastructurePage() {
   if (!status.data) return <ErrorBlock message={status.error ?? "Cluster status unavailable"} onRetry={() => void status.reload()} />;
 
   const live = status.data;
+  const portfolio = isPortfolioRuntime() || live.mode === "aws-portfolio-demo";
   const disconnected = live.connectivity === "disconnected";
 
   return (
@@ -30,15 +32,28 @@ export function InfrastructurePage() {
       <PageHeader
         kicker="Source: Kubernetes"
         title="Infrastructure"
-        description="Live Kubernetes is local k3d. The Amazon EKS design stays plan-only and is not deployed. The constrained executor cannot target opspilot-aws-dev."
+        description={
+          portfolio
+            ? "This page is the public AWS portfolio. It is not attached to k3d or to EKS. Sample rows below are sanitized. The local reliability lab and the plan-only EKS design stay separate."
+            : "Live Kubernetes is local k3d. The Amazon EKS design stays plan-only and is not deployed. The constrained executor cannot target opspilot-aws-dev."
+        }
       />
       <Panel title="Cloud" className="mb-3">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Fact label="AWS account" value={cloud.data?.accountState === "connected" ? "Connected" : "Not connected"} />
+          <Fact
+            label="AWS account"
+            value={
+              cloud.data?.accountState === "connected"
+                ? "Connected"
+                : cloud.data?.accountState === "portfolio-demo"
+                  ? "Portfolio mask only"
+                  : "Not connected"
+            }
+          />
           <Fact label="Account mask" value={cloud.data?.accountMasked || "—"} />
           <Fact label="AWS region" value={cloud.data?.region || "—"} />
           <Fact label="Cloud deployment" value={cloud.data?.cloudDeployment || "PLAN ONLY"} />
-          <Fact label="Kubernetes runtime" value="LOCAL k3d" />
+          <Fact label="Kubernetes runtime" value={portfolio ? cloud.data?.kubernetesRuntime || "Not connected" : "LOCAL k3d"} />
           <Fact label="Paid cloud resources" value={cloud.data?.paidCloudResources || "BLOCKED"} />
           <Fact label="Intentional AWS infrastructure spend" value={cloud.data?.intentionalInfrastructureSpend || "$0"} />
           <Fact label="EKS" value="plan-only" />

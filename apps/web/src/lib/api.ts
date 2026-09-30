@@ -1,3 +1,5 @@
+import { isPortfolioRuntime } from "@/lib/runtime";
+
 export class ApiError extends Error {
   status: number;
 
@@ -45,6 +47,14 @@ export function apiGet<T>(path: string): Promise<T> {
 }
 
 export function apiPost<T>(path: string, body: unknown): Promise<T> {
+  if (isPortfolioRuntime()) {
+    return Promise.reject(
+      new ApiError(
+        "This public portfolio is read-only. Remediation, experiments, and approvals stay on the local reliability lab.",
+        403,
+      ),
+    );
+  }
   return request<T>(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmptyBlock, ErrorBlock, LoadingBlock, PageHeader, Panel } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { apiPost } from "@/lib/api";
+import { isPortfolioRuntime } from "@/lib/runtime";
 import { formatLatency, formatPercent } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 
@@ -158,12 +159,17 @@ function RolloutDetail({
             <Field label="Stable error / p95" value={`${gateKnown ? formatPercent(view.stableErrorRate * 100) : "—"} / ${gateKnown ? formatLatency(view.stableP95 * 1000) : "—"}`} />
           </dl>
           <p className="mt-3 text-sm">Proposal: <span className="font-mono">{view.proposalAction || "none yet"}</span></p>
-          {view.state === "AWAITING_APPROVAL" && view.proposalAction ? (
+          {view.state === "AWAITING_APPROVAL" && view.proposalAction && !isPortfolioRuntime() ? (
             <div className="mt-3">
               <Button disabled={pending} onClick={() => onApprove(view.proposalAction)}>
                 {pending ? "Recording approval…" : "Approve constrained action"}
               </Button>
             </div>
+          ) : null}
+          {isPortfolioRuntime() && view.state === "AWAITING_APPROVAL" ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              This canary is a sanitized sample. Approval stays on the local reliability lab and is not sent from AWS.
+            </p>
           ) : null}
           {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
           {view.verification ? <p className="mt-3 text-sm text-muted-foreground">Verification: {view.verification}</p> : null}

@@ -4,7 +4,7 @@ const groups: Record<Tone, string[]> = {
   good: ["healthy", "resolved", "succeeded", "ready", "ok", "allowed", "complete", "completed", "connected", "approved", "active"],
   warn: ["degraded", "investigating", "warning", "suspect", "running", "mitigating", "in-progress", "needs_attention"],
   bad: ["critical", "error", "sev-1", "sev-2", "failed", "disconnected"],
-  info: ["sev-3", "info", "simulated", "normal", "recovering"],
+  info: ["sev-3", "info", "simulated", "normal", "recovering", "portfolio-demo", "portfolio-sample"],
   neutral: ["idle", "inactive", "aborted"],
 };
 
