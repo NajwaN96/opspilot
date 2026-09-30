@@ -24,6 +24,26 @@ Three venues, kept separate:
 - GitHub deploys the portfolio with OIDC and a role that can update that one Lambda and read the free-plan state.
 - The service catalog is a validated contract. The scorecard reports missing security contexts instead of inventing a score.
 
+## Verified End-to-End Reliability Test
+
+A person ran this on local `opspilot-dev`. It is not the `INC-142` simulation.
+
+| Step | What happened |
+| --- | --- |
+| Healthy baseline | `payment-api` image `opspilot-demo:1.4.2`, Ready 1/1, canary desired 0 |
+| Bad release | **Deploy Bad payment** moved that Deployment to `opspilot-demo:1.5.0-bad` |
+| Real degradation | Live traffic, about 30% HTTP 500 and added latency, pod still Ready |
+| Prometheus detection | Rule `PAYMENT_API_RELIABILITY_DEGRADATION`: 77 requests, 34.6% errors, p95 975 ms |
+| Automatic incident | `INC-REAL-ac2c87e5` opened by the detector |
+| Evidence | Prometheus window, Jaeger traces, Deployment version `1.5.0-bad` |
+| Deterministic diagnosis | Known bad release. The AI Investigator was unauthorized and was not required |
+| Human approval | **Approve & Execute** for `rollback-payment-api` |
+| Constrained rollback | Only `demo-shop/payment-api` returned to `opspilot-demo:1.4.2` |
+| Recovery verification | Prometheus healthy after the rollback |
+| Resolution | `INC-REAL-ac2c87e5` status `resolved` |
+
+`INC-142` remains the seeded simulation. Do not cite it as this test.
+
 ## Reliability
 
 Detection is deterministic. Verification reads Prometheus again after the rollback. The audit trail records approval, execution, and the result.

@@ -1,13 +1,35 @@
 # OpsPilot
 
-Kubernetes reliability control plane for detection, investigation, approval, and one constrained remediation.
+OpsPilot is a Kubernetes reliability control plane. It detects service degradation from Prometheus, correlates traces and the Deployment image, proposes one constrained rollback, requires a person to approve it, executes only that allowlisted change, and checks Prometheus again before it calls the incident resolved.
 
-Interview notes: [docs/PORTFOLIO.md](docs/PORTFOLIO.md). Demo script: [docs/DEMO.md](docs/DEMO.md).
+A bad release otherwise shows up as a chart and a chat message, and the person who can undo it often has standing cluster-admin access. OpsPilot keeps that undo narrow and recorded.
+
+The stack is Go, Next.js, PostgreSQL, k3d, Prometheus, OpenTelemetry, Jaeger, Grafana, Alertmanager, GitHub Actions, and GitHub OIDC into one AWS Lambda function. The EKS description in OpenTofu is plan only.
+
+| Question | Answer |
+| --- | --- |
+| What is live? | Local cluster `opspilot-dev`: demo-shop traffic, detection, human approval, and the payment-api rollback |
+| What is public? | [AWS PUBLIC PORTFOLIO — READ ONLY](https://jcqljkrf25oijz4cryqw7c76lq0wmzhi.lambda-url.us-east-1.on.aws/). Sanitized console. It is not connected to the local cluster, Prometheus, or PostgreSQL |
+| What is local? | The interactive lab. The header reads **LOCAL — LIVE** |
+| What is plan-only? | `infra/terraform` EKS. CI validates it. Nothing applies it |
+
+## Start here
+
+- [Live public demo](https://jcqljkrf25oijz4cryqw7c76lq0wmzhi.lambda-url.us-east-1.on.aws/) — **AWS PUBLIC PORTFOLIO — READ ONLY**
+- [GitHub](https://github.com/NajwaN96/opspilot)
+- [Architecture](docs/architecture/overview.md)
+- [Verified reliability demo](docs/DEMO.md#verified-end-to-end-reliability-test)
+- [Developer portal](https://jcqljkrf25oijz4cryqw7c76lq0wmzhi.lambda-url.us-east-1.on.aws/developer-portal) on the public site (`/developer-portal` locally)
+- [Security model](docs/adr/0003-safe-remediation-model.md) and the [public Security page](https://jcqljkrf25oijz4cryqw7c76lq0wmzhi.lambda-url.us-east-1.on.aws/security)
+- [Five-minute recruiter walkthrough](docs/RECRUITER-DEMO.md)
+- [Handoff](docs/HANDOFF.md)
+
+Interview notes: [docs/PORTFOLIO.md](docs/PORTFOLIO.md). Screenshot list: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
 
 | Venue | What it is |
 | --- | --- |
-| Local k3d `opspilot-dev` | Live demo-shop, Prometheus, traces, detection, and the payment-api rollback |
-| Public Lambda | Read-only portfolio console. Sanitized samples. Mutations return 403 |
+| Local k3d `opspilot-dev` | Live demo-shop, Prometheus, traces, detection, and the payment-api rollback. Header: **LOCAL — LIVE** |
+| Public Lambda | **AWS PUBLIC PORTFOLIO — READ ONLY**. Sanitized samples. Mutations return 403. Not attached to the local cluster |
 | `infra/terraform` | EKS plan only. CI validates it. Nothing applies it |
 
 The developer portal lists the demo-shop catalog, golden-path templates, SLOs, and runbooks. It does not replace Backstage and it does not create cloud infrastructure.
@@ -120,11 +142,10 @@ See [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ### Planned
 
-- A learning loop
-- GitOps and AWS/EKS
+- A learning loop that changes a later deploy from a closed incident
 - Any remediation other than `demo-shop/payment-api` `1.5.0-bad` → `1.4.2`
 
-AWS, Terraform, Grafana, Loki, and Argo are intentionally not integrated. The Kubernetes reader still cannot create, update, delete, or exec. The payment rollback is a separate method, and neither the detection engine nor the investigator is given it. Generic actions such as `rollback` are still rejected for `INC-REAL-…` incidents. The model may recommend `ROLLBACK_PAYMENT_API`; that string is not an executor request.
+Grafana and Alertmanager run in the local cluster and cannot change a rollout. Loki is not integrated. Argo CD is not installed. The EKS OpenTofu stack is plan only. The Kubernetes reader still cannot create, update, delete, or exec. The payment rollback is a separate method, and neither the detection engine nor the investigator is given it. Generic actions such as `rollback` are still rejected for `INC-REAL-…` incidents. The model may recommend `ROLLBACK_PAYMENT_API`; that string is not an executor request.
 
 ## Current MVP
 
@@ -235,13 +256,19 @@ Docker Compose is optional and documented in [infra/README.md](infra/README.md).
 
 ## Screenshots
 
-From the local simulated MVP.
+The three images below are the seeded `INC-142` simulation, not the live cluster. The verified `INC-REAL-ac2c87e5` capture list is [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
 
 ![production-01 overview with INC-142 open](docs/images/overview.webp)
 
 ![INC-142 before approval](docs/images/incident.webp)
 
 ![INC-142 after the simulated rollback](docs/images/incident-resolved.webp)
+
+Local console after the verified run. The header is **LOCAL — LIVE**. The incident image is the resolved `INC-REAL-ac2c87e5` page, including the Prometheus window from creation.
+
+![Local overview](docs/images/01-overview.png)
+
+![Resolved INC-REAL-ac2c87e5](docs/images/11-resolved-incident.png)
 
 ## Layout
 
