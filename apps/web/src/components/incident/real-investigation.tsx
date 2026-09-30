@@ -55,7 +55,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
           <h1 className="font-mono text-lg font-semibold">{incident.id}</h1>
           <StatusBadge value={incident.severity} />
           <StatusBadge value={incident.status} />
-          <span className="border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[11px] uppercase tracking-wide text-emerald-200">
+          <span className="border border-status-success/20 bg-status-success-soft px-2 py-0.5 text-[11px] uppercase tracking-wide text-status-success">
             Real evidence
           </span>
         </div>
@@ -71,7 +71,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
         </p>
       </div>
       <IncidentLifecycle incident={incident} />
-      <div className="mb-3 grid gap-2 border border-emerald-400/30 bg-card px-3 py-2 text-sm sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-3 grid gap-2 rounded-xl border border-status-success/20 bg-white px-4 py-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
         <Fact label="Incident source" value="Detection Engine" />
         <Fact label="Metrics source" value={incident.metricsSource || "Prometheus"} />
         <Fact label="Trace source" value={incident.traceSource || "OpenTelemetry"} />
@@ -79,7 +79,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
         <Fact label="Simulation" value="No" />
       </div>
       {recovered ? (
-        <div className="mb-3 border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+        <div className="mb-3 rounded-xl border border-status-success/20 bg-status-success-soft px-4 py-2.5 text-sm text-status-success">
           Telemetry recovered at {formatClock(incident.telemetryRecoveredAt ?? "")}. The incident stays open for review. It was not closed automatically.
         </div>
       ) : null}
@@ -95,7 +95,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
             ))}
           </ol>
         </Panel>
-        <Panel title="Metrics evidence" action={<span className="text-[11px] text-emerald-200">Prometheus</span>}>
+        <Panel title="Metrics evidence" action={<span className="text-[11px] text-status-success">Prometheus</span>}>
           <dl className="grid gap-3 sm:grid-cols-2">
             <Fact label="Error rate" value={formatPercent(incident.snapshot.errorRate)} mono />
             <Fact label="P95 latency" value={formatLatency(incident.snapshot.p95LatencyMs)} mono />
@@ -131,7 +131,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
             ))}
           </ul>
         </Panel>
-        <Panel title="Trace evidence" action={<span className="text-[11px] text-emerald-200">OpenTelemetry</span>}>
+        <Panel title="Trace evidence" action={<span className="text-[11px] text-status-success">OpenTelemetry</span>}>
           {(incident.evidence?.traces ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">No slow or failed traces were stored with this incident.</p>
           ) : (
@@ -149,7 +149,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
             </ul>
           )}
         </Panel>
-        <Panel title="Kubernetes state" action={<span className="text-[11px] text-emerald-200">opspilot-dev</span>}>
+        <Panel title="Kubernetes state" action={<span className="text-[11px] text-status-success">opspilot-dev</span>}>
           <dl className="grid gap-3 sm:grid-cols-3">
             <Fact label="Version" value={incident.snapshot.version || "—"} mono />
             <Fact label="Status" value={incident.snapshot.status || "—"} />
@@ -179,7 +179,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
               <span className="font-mono">{incident.recommendation?.to}</span>. The image is chosen on the server.
             </p>
           ) : (
-            <p className="mt-2 text-xs uppercase tracking-wide text-amber-200">Kubernetes rollback is not available for this incident.</p>
+            <p className="mt-2 text-xs uppercase tracking-wide text-status-warning">Kubernetes rollback is not available for this incident.</p>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             {rollback && !busy ? (
@@ -206,7 +206,7 @@ export function RealInvestigation({ incident, onReload }: { incident: Incident; 
               ))}
             </ol>
           ) : null}
-          {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+          {actionError ? <p className="mt-2 text-xs text-status-danger">{actionError}</p> : null}
         </Panel>
         <Panel title="Audit trail">
           {(incident.audit ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No audit events yet.</p> : null}

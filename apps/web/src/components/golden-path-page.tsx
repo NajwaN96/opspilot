@@ -69,7 +69,7 @@ export function GoldenPathPage() {
               <option value="canary">Canary</option>
             </select>
           </label>
-          {error ? <p className="text-sm text-amber-200">{error}</p> : null}
+          {error ? <p className="text-sm text-status-warning">{error}</p> : null}
           {portfolio ? (
             <p className="text-sm text-muted-foreground">The public site cannot write files. Use the local lab to copy a template into generated/services.</p>
           ) : (

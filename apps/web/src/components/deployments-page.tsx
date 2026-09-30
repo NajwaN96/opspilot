@@ -48,7 +48,7 @@ export function DeploymentsPage() {
         title="Deployments"
         description="Rollouts recorded by the simulated cluster. The payment-api v1.8.2 rollout is the suspect change for INC-142."
       />
-      <div className="border border-border bg-card">
+      <div className="surface-card overflow-hidden rounded-xl">
         <Table>
           <caption className="sr-only">Deployments</caption>
           <TableHeader>

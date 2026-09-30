@@ -16,7 +16,7 @@ export function ServicesCatalog() {
   return (
     <div>
       <PageHeader kicker="Catalog" title="Services" description="Simulated services keep their incident telemetry. Kubernetes rows are discovered workloads and do not include those metrics." />
-      <div className="border border-border bg-card">
+      <div className="surface-card overflow-hidden rounded-xl">
         <Table>
           <caption className="sr-only">Service catalog</caption>
           <TableHeader>
@@ -44,10 +44,14 @@ export function ServicesCatalog() {
                 <TableCell>{service.runtime}</TableCell>
                 <TableCell className="font-mono text-xs">{service.version}</TableCell>
                 <TableCell className="font-mono tabular-nums">{formatPercent(service.availability)}</TableCell>
-                <TableCell className="font-mono tabular-nums">{formatLatency(service.p95LatencyMs)}</TableCell>
-                <TableCell className="font-mono tabular-nums">{formatPercent(service.errorRate)}</TableCell>
+                <TableCell className={service.p95LatencyMs >= 1000 ? "font-mono text-xs tabular-nums text-status-warning" : "font-mono text-xs tabular-nums"}>
+                  {formatLatency(service.p95LatencyMs)}
+                </TableCell>
+                <TableCell className={service.errorRate >= 1 ? "font-mono text-xs tabular-nums text-status-danger" : "font-mono text-xs tabular-nums"}>
+                  {formatPercent(service.errorRate)}
+                </TableCell>
                 <TableCell>
-                  <span className={service.slo.withinSLO ? "text-emerald-300" : "text-red-300"}>
+                  <span className={service.slo.withinSLO ? "text-status-success" : "text-status-danger"}>
                     {formatPercent(service.slo.compliance)}
                   </span>
                   <div className="text-[11px] text-muted-foreground">obj {formatPercent(service.slo.objective)}</div>
@@ -57,7 +61,7 @@ export function ServicesCatalog() {
           </TableBody>
         </Table>
       </div>
-      <div className="mt-3 border border-border bg-card">
+      <div className="mt-3 surface-card overflow-hidden rounded-xl">
         <div className="border-b border-border px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">Source: Kubernetes</div>
         <Table>
           <TableHeader>

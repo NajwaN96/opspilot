@@ -26,13 +26,13 @@ export function EvidencePanel({ evidence }: { evidence: Evidence }) {
           {evidence.logs.map((line, index) => {
             const hot = line.message.includes("database connection pool exhausted");
             return (
-              <li key={`${line.clock}-${index}`} className={`grid grid-cols-[3.25rem_3.5rem_8rem_minmax(0,1fr)] gap-2 border-b border-border/70 py-1.5 ${hot ? "bg-red-400/10" : ""}`}>
+              <li key={`${line.clock}-${index}`} className={`grid grid-cols-[3.25rem_3.5rem_8rem_minmax(0,1fr)] gap-2 border-b border-border/70 py-1.5 ${hot ? "bg-status-danger-soft" : ""}`}>
                 <span className="text-muted-foreground">{line.clock}</span>
-                <span className={line.level === "ERROR" ? "text-red-300" : line.level === "WARN" ? "text-amber-200" : "text-sky-200"}>
+                <span className={line.level === "ERROR" ? "text-status-danger" : line.level === "WARN" ? "text-status-warning" : "text-status-info"}>
                   {line.level}
                 </span>
                 <span className="truncate text-muted-foreground">{line.service}</span>
-                <span className={hot ? "text-red-200" : ""}>{line.message}</span>
+                <span className={hot ? "text-status-danger" : ""}>{line.message}</span>
               </li>
             );
           })}
@@ -57,15 +57,15 @@ export function EvidencePanel({ evidence }: { evidence: Evidence }) {
                           <span className="font-medium">{span.service}</span>
                           <span className="ml-2 font-mono text-muted-foreground">{span.name}</span>
                         </span>
-                        <span className={`font-mono ${span.slow ? "text-red-300" : ""}`}>{formatLatency(span.durationMs)}</span>
+                        <span className={`font-mono ${span.slow ? "text-status-danger" : ""}`}>{formatLatency(span.durationMs)}</span>
                       </div>
                       <div className="mt-1 h-1.5 bg-muted">
                         <div
-                          className={span.slow ? "h-full bg-red-400" : "h-full bg-sky-400/80"}
+                          className={span.slow ? "h-full bg-status-danger" : "h-full bg-status-info"}
                           style={{ width: `${Math.max(4, (span.durationMs / max) * 100)}%` }}
                         />
                       </div>
-                      {span.slow ? <div className="mt-1 text-[11px] text-red-300">Slow span</div> : null}
+                      {span.slow ? <div className="mt-1 text-[11px] text-status-danger">Slow span</div> : null}
                     </li>
                   ))}
                 </ol>

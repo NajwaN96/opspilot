@@ -6,6 +6,7 @@ const portfolioExport = process.env.OPSPILOT_AWS_PORTFOLIO === "1";
 const nextConfig: NextConfig = {
   // The console is opened at 127.0.0.1. Next blocks dev assets for that host unless it is listed.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  devIndicators: { position: "bottom-right" },
   ...(portfolioExport
     ? {
         output: "export" as const,

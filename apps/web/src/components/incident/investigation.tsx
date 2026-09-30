@@ -86,14 +86,14 @@ export function Investigation({ id }: { id: string }) {
         </div>
       </div>
       <IncidentLifecycle incident={incident} />
-      <p className="mb-3 border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+      <p className="mb-3 surface-card overflow-hidden rounded-xl px-3 py-2 text-xs text-muted-foreground">
         Simulated analysis for the current MVP. Approving a rollback records the decision and runs a fake executor. kubectl is not called.
       </p>
       <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <LiveMetric label="Error rate" value={incident.snapshot.errorRate} render={(value) => formatPercent(value, 1)} />
         <LiveMetric label="P95 latency" value={incident.snapshot.p95LatencyMs} render={(value) => formatLatency(value)} />
         <LiveMetric label="Database connections" value={incident.snapshot.dbConnections} render={(value) => `${Math.round(value)}%`} />
-        <div className="border border-border bg-card px-3 py-2">
+        <div className="surface-card overflow-hidden rounded-xl px-3 py-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Status</div>
           <div className="mt-1">
             <StatusBadge value={incident.status} />
@@ -108,7 +108,7 @@ export function Investigation({ id }: { id: string }) {
                 <li key={`${event.at}-${event.title}-${index}`} className="grid grid-cols-[3.25rem_12px_minmax(0,1fr)] gap-2">
                   <time className="pt-1 font-mono text-xs text-muted-foreground">{event.clock}</time>
                   <div className="flex flex-col items-center">
-                    <span className={`mt-1.5 size-2 rounded-full ${event.kind === "remediation" ? "bg-emerald-400" : "bg-amber-300"}`} />
+                    <span className={`mt-1.5 size-2 rounded-full ${event.kind === "remediation" ? "bg-status-success" : "bg-status-warning"}`} />
                     {index < (incident.timeline?.length ?? 0) - 1 ? <span className="w-px flex-1 bg-border" /> : null}
                   </div>
                   <div className="pb-3">
@@ -174,7 +174,7 @@ export function Investigation({ id }: { id: string }) {
                 Approval is not available on the public AWS portfolio. The constrained executor stays on the local reliability lab.
               </p>
             ) : null}
-            {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+            {actionError ? <p className="mt-2 text-xs text-status-danger">{actionError}</p> : null}
             {incident.remediation ? (
               <div className="mt-3">
                 <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -188,9 +188,9 @@ export function Investigation({ id }: { id: string }) {
                   {incident.remediation.steps.map((step) => (
                     <li key={step.name} className="flex items-start gap-2 text-sm">
                       {step.status === "complete" ? (
-                        <Check className="mt-0.5 size-4 text-emerald-300" aria-hidden />
+                        <Check className="mt-0.5 size-4 text-status-success" aria-hidden />
                       ) : (
-                        <Circle className={`mt-0.5 size-4 ${step.status === "active" ? "text-amber-200" : "text-muted-foreground"}`} aria-hidden />
+                        <Circle className={`mt-0.5 size-4 ${step.status === "active" ? "text-status-warning" : "text-muted-foreground"}`} aria-hidden />
                       )}
                       <span>
                         <span className={step.status === "pending" ? "text-muted-foreground" : ""}>{step.name}</span>
@@ -200,7 +200,7 @@ export function Investigation({ id }: { id: string }) {
                   ))}
                 </ol>
                 {incident.remediation.status === "succeeded" ? (
-                  <p className="mt-3 text-sm text-emerald-300">Incident resolved. payment-api is serving {incident.snapshot.version}.</p>
+                  <p className="mt-3 text-sm text-status-success">Incident resolved. payment-api is serving {incident.snapshot.version}.</p>
                 ) : null}
               </div>
             ) : null}
@@ -245,7 +245,7 @@ export function Investigation({ id }: { id: string }) {
 function LiveMetric({ label, value, render }: { label: string; value: number; render: (value: number) => string }) {
   const tweened = useTween(value);
   return (
-    <div className="border border-border bg-card px-3 py-2">
+    <div className="surface-card overflow-hidden rounded-xl px-3 py-2">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 font-mono text-xl tabular-nums">{render(tweened)}</div>
     </div>

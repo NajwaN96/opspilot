@@ -7,9 +7,9 @@ import { isPortfolioRuntime } from "@/lib/runtime";
 import { useApi } from "@/lib/use-api";
 
 function verdictClass(value: string) {
-  if (value === "PASS") return "text-emerald-300";
-  if (value === "WARNING") return "text-amber-200";
-  return "text-red-300";
+  if (value === "PASS") return "text-status-success";
+  if (value === "WARNING") return "text-status-warning";
+  return "text-status-danger";
 }
 
 export function ContractDetail({ name }: { name: string }) {
@@ -95,7 +95,7 @@ export function ContractDetail({ name }: { name: string }) {
 
 function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="border border-border bg-card px-3 py-2">
+    <div className="surface-card overflow-hidden rounded-xl px-3 py-2">
       <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className={`mt-1 text-sm ${mono ? "font-mono" : ""}`}>{value}</dd>
     </div>

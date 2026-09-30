@@ -11,7 +11,7 @@ export function ServiceTable({ services, now }: { services: Service[]; now?: num
       <TableHeader>
         <TableRow>
           {["Service", "Status", "Availability", "P95 latency", "Error rate", "Last deployment"].map((heading) => (
-            <TableHead key={heading} className="h-8 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <TableHead key={heading} className="h-9 bg-secondary/80 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
               {heading}
             </TableHead>
           ))}
@@ -29,9 +29,11 @@ export function ServiceTable({ services, now }: { services: Service[]; now?: num
             <TableCell>
               <StatusBadge value={service.status} />
             </TableCell>
-            <TableCell className="font-mono tabular-nums">{formatPercent(service.availability)}</TableCell>
-            <TableCell className="font-mono tabular-nums">{formatLatency(service.p95LatencyMs)}</TableCell>
-            <TableCell className={service.errorRate >= 1 ? "font-mono tabular-nums text-red-300" : "font-mono tabular-nums"}>
+            <TableCell className="font-mono text-xs tabular-nums">{formatPercent(service.availability)}</TableCell>
+            <TableCell className={service.p95LatencyMs >= 1000 ? "font-mono text-xs tabular-nums text-status-warning" : "font-mono text-xs tabular-nums"}>
+              {formatLatency(service.p95LatencyMs)}
+            </TableCell>
+            <TableCell className={service.errorRate >= 1 ? "font-mono text-xs tabular-nums text-status-danger" : "font-mono text-xs tabular-nums"}>
               {formatPercent(service.errorRate)}
             </TableCell>
             <TableCell>

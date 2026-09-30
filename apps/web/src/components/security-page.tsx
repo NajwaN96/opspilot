@@ -28,7 +28,7 @@ export function SecurityPage() {
           {rows.map(([name, mode, detail]) => (
             <li key={name} className="grid gap-1 border-t border-border px-3 py-2 first:border-t-0 md:grid-cols-[10rem_14rem_minmax(0,1fr)]">
               <div className="text-sm font-medium">{name}</div>
-              <div className="font-mono text-[11px] text-sky-100">{mode}</div>
+              <div className="font-mono text-[11px] text-status-info">{mode}</div>
               <div className="text-sm text-muted-foreground">{detail}</div>
             </li>
           ))}

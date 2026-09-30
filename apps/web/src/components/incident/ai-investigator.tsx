@@ -71,7 +71,7 @@ export function AIInvestigator({ incidentId }: { incidentId: string }) {
   return (
     <Panel
       title="AI Investigator"
-      action={<span className="text-[11px] uppercase tracking-wide text-sky-200">{view?.real ? "Real OpenAI" : "Not an executor"}</span>}
+      action={<span className="text-[11px] uppercase tracking-wide text-status-info">{view?.real ? "Real OpenAI" : "Not an executor"}</span>}
     >
       <p className="text-sm text-muted-foreground">
         The investigator reads a prepared evidence snapshot. A recommendation is not a proposal and does not change Kubernetes.
@@ -83,12 +83,12 @@ export function AIInvestigator({ incidentId }: { incidentId: string }) {
         <Field label="Evidence snapshot" value={view?.snapshotVersion ? `v${view.snapshotVersion}` : "—"} />
       </dl>
       {view?.error || view?.status === "unavailable" ? (
-        <p className="mt-3 text-sm text-amber-100">
+        <p className="mt-3 text-sm text-status-warning">
           AI Investigator Unavailable. {view?.error?.startsWith("quota") ? "The OpenAI account has no remaining credits, so this result is not a model investigation. Detection and approval still run." : view?.error}
         </p>
       ) : null}
       {view?.validation && !view.validation.accepted && (view.validation.errors ?? []).length > 0 ? (
-        <p className="mt-3 text-sm text-amber-100">Output was rejected: {view.validation.errors?.join("; ")}</p>
+        <p className="mt-3 text-sm text-status-warning">Output was rejected: {view.validation.errors?.join("; ")}</p>
       ) : null}
       {view?.summary ? (
         <div className="mt-4">
@@ -118,7 +118,7 @@ export function AIInvestigator({ incidentId }: { incidentId: string }) {
       {(view?.riskNotes ?? []).length > 0 ? <p className="mt-2 text-sm text-muted-foreground">{view?.riskNotes?.join(" ")}</p> : null}
       {(view?.omitted ?? []).length > 0 ? <p className="mt-2 text-xs text-muted-foreground">Omitted: {view?.omitted?.join(", ")}</p> : null}
       {chosen ? (
-        <div className="mt-4 border border-sky-400/30 bg-sky-400/5 p-3">
+        <div className="mt-4 border border-status-info/15 bg-status-info-soft p-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-sm">{chosen.id}</span>
             <StatusBadge value={chosen.source} />
@@ -134,7 +134,7 @@ export function AIInvestigator({ incidentId }: { incidentId: string }) {
             {pending ? "Investigating…" : "Run AI Investigation"}
           </Button>
         ) : null}
-        {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+        {actionError ? <p className="mt-2 text-xs text-status-danger">{actionError}</p> : null}
       </div>
     </Panel>
   );
@@ -156,7 +156,7 @@ function Cite({ label, ids, onSelect }: { label: string; ids: string[]; onSelect
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 flex flex-wrap gap-1">
         {ids.map((id) => (
-          <button key={id} type="button" className="border border-sky-400/40 px-2 py-0.5 font-mono text-xs text-sky-100" onClick={() => onSelect(id)}>
+          <button key={id} type="button" className="border border-status-info/30 px-2 py-0.5 font-mono text-xs text-status-info" onClick={() => onSelect(id)}>
             {id}
           </button>
         ))}

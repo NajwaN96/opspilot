@@ -171,7 +171,7 @@ function RolloutDetail({
               This canary is a sanitized sample. Approval stays on the local reliability lab and is not sent from AWS.
             </p>
           ) : null}
-          {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+          {actionError ? <p className="mt-2 text-xs text-status-danger">{actionError}</p> : null}
           {view.verification ? <p className="mt-3 text-sm text-muted-foreground">Verification: {view.verification}</p> : null}
           {view.alerts && view.alerts.length > 0 ? (
             <ul className="mt-3 grid gap-2">
@@ -184,14 +184,14 @@ function RolloutDetail({
             </ul>
           ) : null}
         </Panel>
-        <Panel title="AI investigator recommendation" action={<span className="text-[11px] uppercase tracking-wide text-sky-200">Not a gate</span>}>
+        <Panel title="AI investigator recommendation" action={<span className="text-[11px] uppercase tracking-wide text-status-info">Not a gate</span>}>
           <p className="text-sm text-muted-foreground">The model may recommend continue, promote, or abort. A failing SLO gate still rejects promotion.</p>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Field label="Status" value={view.aiStatus || "not requested"} />
             <Field label="Recommended action" value={view.aiAction || "—"} />
           </dl>
           {view.aiSummary ? <p className="mt-3 text-sm">{view.aiSummary}</p> : null}
-          {view.aiMismatch ? <p className="mt-3 text-sm text-amber-100">The model recommended promotion and the SLO gate failed. Promotion stays rejected.</p> : null}
+          {view.aiMismatch ? <p className="mt-3 text-sm text-status-warning">The model recommended promotion and the SLO gate failed. Promotion stays rejected.</p> : null}
         </Panel>
       </div>
       <Panel title="Timeline" padded={false}>

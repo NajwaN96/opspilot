@@ -26,7 +26,7 @@ export function SloPage() {
             : `${within} of ${services.data.length} records are inside their objective. payment-api's live error rate and p95 are on its service page. Budget remaining is the fraction of the error budget still unused.`
         }
       />
-      <div className="border border-border bg-card">
+      <div className="surface-card overflow-hidden rounded-xl">
         <Table>
           <caption className="sr-only">Service level objectives</caption>
           <TableHeader>
@@ -49,7 +49,7 @@ export function SloPage() {
                 <TableCell className="font-mono">{formatPercent(service.slo.objective)}</TableCell>
                 <TableCell className="font-mono">{formatPercent(service.slo.compliance)}</TableCell>
                 <TableCell className="font-mono">{formatPercent(service.slo.errorBudgetRemaining, 0)}</TableCell>
-                <TableCell className={`font-mono ${service.slo.burnRate >= 2 ? "text-red-300" : ""}`}>{service.slo.burnRate.toFixed(1)}x</TableCell>
+                <TableCell className={`font-mono ${service.slo.burnRate >= 2 ? "text-status-danger" : ""}`}>{service.slo.burnRate.toFixed(1)}x</TableCell>
                 <TableCell>
                   <StatusBadge value={service.slo.withinSLO ? "healthy" : "critical"} />
                 </TableCell>

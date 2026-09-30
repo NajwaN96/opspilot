@@ -16,7 +16,7 @@ export function IncidentList() {
   return (
     <div>
       <PageHeader kicker="production-01" title="Incidents" description="Open and recently resolved incidents. INC-142 is the active investigation." />
-      <div className="border border-border bg-card">
+      <div className="surface-card overflow-hidden rounded-xl">
         {incidents.data.length === 0 ? (
           <EmptyBlock title="No incidents" detail="The cluster has nothing recorded in this window." />
         ) : (

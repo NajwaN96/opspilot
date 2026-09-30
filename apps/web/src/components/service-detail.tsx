@@ -204,7 +204,7 @@ export function ServiceDetail({ id }: { id: string }) {
 
 function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="border border-border bg-card px-3 py-2">
+    <div className="surface-card overflow-hidden rounded-xl px-3 py-2">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={mono ? "mt-1 font-mono text-sm tabular-nums" : "mt-1 text-sm"}>{value}</div>
     </div>

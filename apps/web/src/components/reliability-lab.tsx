@@ -137,7 +137,7 @@ export function ReliabilityLab() {
             <Button className="w-full" disabled={pending || !serviceId} onClick={() => void start()}>
               {pending ? "Starting…" : "Start simulated experiment"}
             </Button>
-            {actionError ? <p className="text-xs text-red-300">{actionError}</p> : null}
+            {actionError ? <p className="text-xs text-status-danger">{actionError}</p> : null}
             <p className="text-[11px] text-muted-foreground">
               The lab records the run and a timer. It does not change {serviceId} or open a new incident.
             </p>
@@ -209,7 +209,7 @@ function CanaryExperiments() {
         </Button>
       </div>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
-      {actionError ? <p className="mt-3 text-sm text-red-300">{actionError}</p> : null}
+      {actionError ? <p className="mt-3 text-sm text-status-danger">{actionError}</p> : null}
     </Panel>
   );
 }
@@ -235,7 +235,7 @@ function BadRelease() {
 
   return (
     <div className="mt-3">
-      <Panel title="Known bad release" action={<span className="text-[11px] uppercase tracking-wide text-amber-200">Development only</span>}>
+      <Panel title="Known bad release" action={<span className="text-[11px] uppercase tracking-wide text-status-warning">Development only</span>}>
         <p className="text-sm font-medium">Deploy Bad payment</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Replaces demo-shop/payment-api with the server-known image for 1.5.0-bad. The pod stays Ready, adds 500ms, and returns HTTP 500 on about 30% of requests. The request does not accept an image name.
@@ -245,8 +245,8 @@ function BadRelease() {
             {pending ? "Deploying…" : "Deploy Bad payment"}
           </Button>
         </div>
-        {message ? <p className="mt-2 text-sm text-amber-100">{message}</p> : null}
-        {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+        {message ? <p className="mt-2 text-sm text-status-warning">{message}</p> : null}
+        {actionError ? <p className="mt-2 text-xs text-status-danger">{actionError}</p> : null}
       </Panel>
     </div>
   );
@@ -300,8 +300,8 @@ function RealExperiment() {
   }
 
   return (
-    <Panel title="Real local experiment" action={<span className="text-[11px] uppercase tracking-wide text-amber-200">Real local experiment</span>}>
-      <p className="text-sm font-medium text-amber-100">Local demo-shop only. Experiment automatically expires.</p>
+    <Panel title="Real local experiment" action={<span className="text-[11px] uppercase tracking-wide text-status-warning">Real local experiment</span>}>
+      <p className="text-sm font-medium text-status-warning">Local demo-shop only. Experiment automatically expires.</p>
       <p className="mt-1 text-sm text-muted-foreground">
         payment-api answers 40% of requests with HTTP 500 and adds 500ms of latency. The fault lives in the process and does not change the Deployment.
       </p>
@@ -340,9 +340,9 @@ function RealExperiment() {
           </Button>
         ) : null}
       </div>
-      {actionError ? <p className="mt-2 text-xs text-red-300">{actionError}</p> : null}
+      {actionError ? <p className="mt-2 text-xs text-status-danger">{actionError}</p> : null}
       {running ? (
-        <div className="mt-3 grid gap-3 border border-amber-400/30 bg-amber-400/10 p-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-3 grid gap-3 border border-status-warning/25 bg-status-warning-soft p-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Status" value="Experiment Running" />
           <Stat label="Elapsed" value={formatDuration(elapsed)} />
           <Stat label="Remaining" value={formatDuration(remaining)} />
@@ -357,7 +357,7 @@ function RealExperiment() {
             <li key={run.id} className="flex flex-wrap items-center gap-2 border-t border-border py-2 text-sm">
               <span className="font-mono text-xs">{run.id}</span>
               <StatusBadge value={run.status} />
-              <span className="text-xs uppercase tracking-wide text-amber-200">Real local experiment</span>
+              <span className="text-xs uppercase tracking-wide text-status-warning">Real local experiment</span>
               <span className="text-xs text-muted-foreground">{run.note}</span>
             </li>
           ))}

@@ -20,7 +20,7 @@ export function DeveloperPortal() {
         title="Developer Portal"
         description="Service catalog, golden paths, ownership, SLOs, and runbooks for demo-shop. This is OpsPilot's internal platform view, not a Backstage replacement."
         actions={
-          <Link href="/developer-portal/golden-path" className="border border-border px-3 py-1.5 text-sm hover:bg-muted">
+          <Link href="/developer-portal/golden-path" className="inline-flex h-8 items-center rounded-[10px] border border-border bg-white px-3 text-sm font-medium hover:bg-secondary">
             Create service preview
           </Link>
         }

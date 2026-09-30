@@ -2,19 +2,21 @@ import { cn } from "@/lib/utils";
 import { statusLabel, statusTone, type Tone } from "@/lib/status";
 
 const tones: Record<Tone, string> = {
-  good: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
-  warn: "border-amber-300/30 bg-amber-300/10 text-amber-200",
-  bad: "border-red-400/35 bg-red-400/10 text-red-300",
-  info: "border-sky-400/30 bg-sky-400/10 text-sky-200",
-  neutral: "border-border bg-muted text-muted-foreground",
+  good: "border-status-success/20 bg-status-success-soft text-status-success",
+  warn: "border-status-warning/25 bg-status-warning-soft text-status-warning",
+  bad: "border-status-danger/20 bg-status-danger-soft text-status-danger",
+  info: "border-status-info/20 bg-status-info-soft text-status-info",
+  neutral: "border-border bg-status-neutral-soft text-status-neutral",
+  sim: "border-status-sim/20 bg-status-sim-soft text-status-sim",
 };
 
 const dots: Record<Tone, string> = {
-  good: "bg-emerald-400",
-  warn: "bg-amber-300",
-  bad: "bg-red-400",
-  info: "bg-sky-300",
-  neutral: "bg-muted-foreground",
+  good: "bg-[var(--status-dot-success)]",
+  warn: "bg-[var(--status-dot-warning)]",
+  bad: "bg-[var(--status-dot-danger)]",
+  info: "bg-[var(--status-dot-info)]",
+  neutral: "bg-[var(--status-dot-neutral)]",
+  sim: "bg-[var(--status-dot-sim)]",
 };
 
 export function StatusBadge({ value, className }: { value: string; className?: string }) {
@@ -22,12 +24,12 @@ export function StatusBadge({ value, className }: { value: string; className?: s
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border px-1.5 py-0.5 text-[11px] font-medium tracking-wide",
+        "inline-flex h-6 items-center gap-1.5 rounded-md border px-2 text-[12px] font-medium leading-none transition-colors duration-150",
         tones[tone],
         className,
       )}
     >
-      <span className={cn("size-1.5 rounded-full", dots[tone])} aria-hidden />
+      <span className={cn("size-1.5 shrink-0 rounded-full", dots[tone])} aria-hidden />
       {statusLabel(value)}
     </span>
   );

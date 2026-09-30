@@ -66,7 +66,7 @@ export function InfrastructurePage() {
         <Fact label="Environment" value={venueLabel(live)} />
         <Fact label="Cluster" value={live.cluster} />
         <Fact label="Mode" value={clusterModeLabel(live.mode)} />
-        <div className="border border-border bg-card px-3 py-2">
+        <div className="surface-card overflow-hidden rounded-xl px-3 py-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Connectivity</div>
           <div className="mt-1">
             <StatusBadge value={live.connectivity} />
@@ -81,7 +81,7 @@ export function InfrastructurePage() {
         <ComponentHealth name="Trace backend" value={telemetry.data?.traces} />
       </div>
       {disconnected ? (
-        <div className="border border-border bg-card px-3 py-4 text-sm text-muted-foreground">
+        <div className="surface-card overflow-hidden rounded-xl px-3 py-4 text-sm text-muted-foreground">
           {live.message || "The local cluster is disconnected."} Namespace, workload, pod, and event tables stay empty until a real API response arrives.
         </div>
       ) : (
@@ -194,7 +194,7 @@ export function InfrastructurePage() {
           </Panel>
         </div>
       )}
-      {events.error ? <p className="mt-2 text-xs text-red-300">{events.error}</p> : null}
+      {events.error ? <p className="mt-2 text-xs text-status-danger">{events.error}</p> : null}
     </div>
   );
 }
@@ -202,16 +202,16 @@ export function InfrastructurePage() {
 function ComponentHealth({ name, value }: { name: string; value?: string }) {
   const connected = value === "connected" || value === "ok";
   return (
-    <div className="border border-border bg-card px-3 py-2">
+    <div className="surface-card overflow-hidden rounded-xl px-3 py-2">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{name}</div>
-      <div className={`mt-1 text-sm ${connected ? "text-emerald-300" : "text-amber-200"}`}>{connected ? "Connected" : "Unavailable"}</div>
+      <div className={`mt-1 text-sm ${connected ? "text-status-success" : "text-status-warning"}`}>{connected ? "Connected" : "Unavailable"}</div>
     </div>
   );
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-border bg-card px-3 py-2">
+    <div className="surface-card overflow-hidden rounded-xl px-3 py-2">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 font-mono text-sm">{value}</div>
     </div>

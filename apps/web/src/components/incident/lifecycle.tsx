@@ -28,7 +28,7 @@ export function IncidentLifecycle({ incident }: { incident: Incident }) {
   const current = indexFor(incident);
   const runbook = incident.serviceName === "payment-api" ? "payment-api-high-error-rate" : "dependency-failure";
   return (
-    <div className="mb-3 border border-border bg-card px-3 py-2">
+    <div className="mb-3 surface-card overflow-hidden rounded-xl px-3 py-2">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Lifecycle</div>
         <Link className="text-[11px] hover:underline" href={`/runbooks/${runbook}`}>
@@ -39,7 +39,7 @@ export function IncidentLifecycle({ incident }: { incident: Incident }) {
         {STEPS.map((step, index) => (
           <li
             key={step}
-            className={`px-1.5 py-0.5 font-mono text-[10px] ${index === current ? "bg-primary text-primary-foreground" : index < current ? "text-emerald-300" : "text-muted-foreground"}`}
+            className={`rounded-md px-1.5 py-0.5 text-[11px] ${index === current ? "bg-primary text-primary-foreground" : index < current ? "text-status-success" : "text-muted-foreground"}`}
           >
             {step}
           </li>

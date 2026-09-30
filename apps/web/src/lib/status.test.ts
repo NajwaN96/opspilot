@@ -4,7 +4,10 @@ import { statusLabel, statusTone } from "./status";
 describe("statusTone", () => {
   it("maps operational states to a tone", () => {
     expect(statusTone("connected")).toBe("good");
-    expect(statusTone("disconnected")).toBe("bad");
+    expect(statusTone("disconnected")).toBe("neutral");
+    expect(statusTone("unavailable")).toBe("warn");
+    expect(statusTone("simulated")).toBe("sim");
+    expect(statusTone("failed")).toBe("bad");
     expect(statusTone("healthy")).toBe("good");
     expect(statusTone("Resolved")).toBe("good");
     expect(statusTone("critical")).toBe("bad");
