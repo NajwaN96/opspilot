@@ -1,69 +1,210 @@
 name: ci
 
 on:
-  push:
   pull_request:
+  push:
+    branches-ignore:
+      - main
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
+  repository:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: policy and secret filenames
+        run: |
+          python3 infra/aws-zero-cost/ci_policy.py
+          bash infra/scripts/security_scan.sh
+
   api:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.22"
+          cache-dependency-path: apps/api/go.sum
       - name: gofmt
         run: test -z "$(gofmt -l .)"
+      - name: vet
+        run: go vet ./...
       - name: test
         run: go test ./...
+      - name: race
+        run: go test -race ./...
       - name: build
         run: go build -o /tmp/opspilot ./cmd/opspilot
 
-  web:
+  web-test:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  web-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
 
-  cloud:
+  web-typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+
+  web-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: opentofu/setup-opentofu@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: install
+        working-directory: apps/web
+        run: npm ci
+      - name: production build
+        working-directory: apps/web
+        run: npm run build
+      - name: portfolio artifact
+        env:
+          OPSPILOT_GIT_COMMIT: ${{ github.sha }}
+        run: |
+          export OPSPILOT_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          infra/aws-zero-cost/package.sh
+          test -s infra/aws-zero-cost/dist/portfolio.zip.sha256
+          test -s infra/aws-zero-cost/dist/release-metadata.json
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          curl -fsSL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks detect --source . --redact --exit-code 1
+
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.22"
+          cache-dependency-path: apps/api/go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: go vulnerability database
+        working-directory: apps/api
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
+      - name: npm audit
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm audit --audit-level=high
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: trivy
+        run: |
+          curl -fsSL -o trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz
+          tar -xzf trivy.tar.gz trivy
+          ./trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --skip-dirs apps/web/node_modules,apps/web/.next,apps/web/out,infra/aws-zero-cost/function/site,infra/aws-zero-cost/dist .
+
+  iac:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
           tofu_version: 1.12.6
-      - name: install kustomize
-        run: |
-          curl -fsSL -o kustomize.tgz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.6.0/kustomize_v5.6.0_linux_amd64.tar.gz
-          tar -xzf kustomize.tgz
-          sudo mv kustomize /usr/local/bin/kustomize
-      - name: tofu fmt and validate
+      - name: plan-only stack
         working-directory: infra/terraform/environments/dev
         run: |
           tofu fmt -check -recursive ../..
           tofu init -input=false -backend=false
           tofu validate
-      - name: guardrails, gitops, and secret scan
+      - name: portfolio stack
+        working-directory: infra/aws-zero-cost
+        run: |
+          tofu fmt -check
+          tofu init -input=false -backend=false
+          tofu validate
+
+  gitops:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: kustomize
+        run: |
+          curl -fsSL -o kustomize.tgz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.6.0/kustomize_v5.6.0_linux_amd64.tar.gz
+          tar -xzf kustomize.tgz
+          sudo mv kustomize /usr/local/bin/kustomize
+      - name: render
+        run: bash infra/scripts/gitops_render_test.sh
+
+  zero-cost:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: guards
         run: |
           bash infra/scripts/guard_test.sh
           if bash infra/scripts/cost-classify; then
-            echo "cost-classify must refuse the current billable stack" >&2
+            echo "plan-only stack must stay refused" >&2
             exit 1
           fi
-          bash infra/scripts/gitops_render_test.sh
-          bash infra/scripts/security_scan.sh
+          bash scripts/aws-zero-cost-guard-test.sh
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: build demo image
+        run: docker build -t opspilot-demo:ci apps/demo

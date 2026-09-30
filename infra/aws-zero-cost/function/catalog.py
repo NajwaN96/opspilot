@@ -6,6 +6,10 @@ POST is refused by the handler before this module is asked to mutate.
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
 READ_ONLY = (
     "This public portfolio is read-only. Remediation, experiments, and approvals "
     "stay on the local reliability lab."
@@ -263,6 +267,34 @@ def rollout() -> dict:
     }
 
 
+def release() -> dict:
+    """Public build labels only. Extra fields in release.json are ignored."""
+    raw: dict = {}
+    path = Path(__file__).with_name("release.json")
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            loaded = None
+        if isinstance(loaded, dict):
+            raw = loaded
+    commit = str(raw.get("gitCommit") or "unknown")
+    if not re.fullmatch(r"[0-9a-f]{7,40}", commit):
+        commit = "unknown"
+    built = str(raw.get("buildTime") or "unknown")
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z", built):
+        built = "unknown"
+    version = str(raw.get("version") or "aws-portfolio-demo")
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,40}", version):
+        version = "aws-portfolio-demo"
+    return {
+        "version": version,
+        "gitCommit": commit,
+        "buildTime": built,
+        "environment": "aws-portfolio-demo",
+    }
+
+
 def cloud() -> dict:
     return {
         "accountState": "portfolio-demo",
@@ -313,6 +345,7 @@ def resolve(method: str, path: str):
             "traces": "not-connected",
         },
         "/api/v1/cloud/status": cloud(),
+        "/api/v1/release": release(),
         "/api/v1/clusters": [
             {
                 "id": "portfolio-sample",

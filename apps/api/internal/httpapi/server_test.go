@@ -66,6 +66,35 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestReleaseMetadataIsSanitized(t *testing.T) {
+	srv := newTestServer(t)
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/api/v1/release")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"version", "gitCommit", "buildTime", "environment"} {
+		if body[key] == "" {
+			t.Fatalf("missing %s in %#v", key, body)
+		}
+	}
+	if body["environment"] != "local-live" {
+		t.Fatalf("environment %#v", body["environment"])
+	}
+	if _, ok := body["account"]; ok {
+		t.Fatal("account leaked")
+	}
+}
+
 func TestPaymentServiceIsCritical(t *testing.T) {
 	srv := newTestServer(t)
 	defer srv.Close()

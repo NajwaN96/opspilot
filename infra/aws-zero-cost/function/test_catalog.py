@@ -15,6 +15,20 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertIn("read-only", body["error"]["message"])
 
+    def test_release_ignores_extra_fields(self):
+        path = Path(catalog.__file__).with_name("release.json")
+        path.write_text(
+            '{"version":"aws-portfolio-demo","gitCommit":"dd63e087d68321df4539889b1920949e4903a941",'
+            '"buildTime":"2026-09-30T08:00:00Z","account":"123456789012","path":"/var/task"}',
+            encoding="utf-8",
+        )
+        self.addCleanup(path.unlink)
+        status, body = catalog.resolve("GET", "/api/v1/release")
+        self.assertEqual(status, 200)
+        self.assertEqual(set(body), {"version", "gitCommit", "buildTime", "environment"})
+        self.assertEqual(body["environment"], "aws-portfolio-demo")
+        self.assertNotIn("account", body)
+
     def test_catalog_has_no_secret_material(self):
         blob = json.dumps(catalog.resolve("GET", "/api/v1/cloud/status")[1])
         blob += json.dumps(catalog.resolve("GET", "/api/v1/incidents/INC-142")[1])

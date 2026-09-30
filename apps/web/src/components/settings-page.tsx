@@ -4,7 +4,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { PageHeader, Panel } from "@/components/states";
 import { isPortfolioRuntime } from "@/lib/runtime";
 import { useApi } from "@/lib/use-api";
-import type { Health } from "@/lib/types";
+import type { Health, ReleaseInfo } from "@/lib/types";
 
 const localRows = [
   ["Data source", "In-memory repository. PostgreSQL is the planned replacement."],
@@ -25,6 +25,7 @@ const portfolioRows = [
 
 export function SettingsPage() {
   const health = useApi<Health>("/health", 10000);
+  const release = useApi<ReleaseInfo>("/api/v1/release");
   const portfolio = isPortfolioRuntime();
   const rows = portfolio ? portfolioRows : localRows;
   return (
@@ -44,6 +45,19 @@ export function SettingsPage() {
               </div>
             ))}
           </dl>
+        </Panel>
+        <div className="grid content-start gap-3">
+        <Panel title="Release">
+          {release.data ? (
+            <dl className="space-y-2 text-sm">
+              <Field label="Environment" value={release.data.environment} />
+              <Field label="Version" value={release.data.version} />
+              <Field label="Git commit" value={release.data.gitCommit} />
+              <Field label="Built" value={release.data.buildTime} />
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">{release.error ?? "Reading release metadata"}</p>
+          )}
         </Panel>
         <Panel title="API">
           <div className="flex items-center justify-between">
@@ -65,7 +79,17 @@ export function SettingsPage() {
             </div>
           </dl>
         </Panel>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="font-mono">{value}</dd>
     </div>
   );
 }

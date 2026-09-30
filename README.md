@@ -206,6 +206,12 @@ scripts/aws-cost-status.sh
 
 Preflight checks the free plan, account suffix `3851`, region `us-east-1`, and an allowlist of Lambda, IAM, and one log group. `OPSPILOT_PAID_CLOUD_OVERRIDE` must stay unset. The decision is [ADR 0028](docs/adr/0028-aws-zero-cost-portfolio.md).
 
+## CI and release
+
+Pull requests run `.github/workflows/ci.yml`: Go test, vet, race, and build; Vitest, ESLint, TypeScript, and a Next.js production build; the portfolio export; Gitleaks; govulncheck; npm audit; Trivy; OpenTofu validate for both the plan-only EKS stack and the portfolio stack; Kustomize render; and the zero-cost policy. A push to `main` runs `.github/workflows/deploy-aws.yml`, which repeats those gates and then assumes `opspilot-github-deployer` with a GitHub OIDC token. The role can update the existing function `opspilot-portfolio` and read the free-plan state. It cannot create EKS, EC2, or other infrastructure. Smoke tests hit the public function URL. A failed check uploads the previous zip again. The runbook is [docs/runbooks/phase-8-cicd.md](docs/runbooks/phase-8-cicd.md). The decision is [ADR 0029](docs/adr/0029-secure-cicd-aws-oidc.md).
+
+`GET /api/v1/release` returns version, git commit, build time, and environment. It does not return an account id or credentials. Settings shows the same fields.
+
 Useful environment variables are listed in [.env.example](.env.example). None are required for the defaults above.
 
 Checks:
@@ -269,3 +275,4 @@ runbooks     payment-api rollback and reliability degradation
 - [0020 — Rollout state ownership](docs/adr/0020-rollout-state-ownership.md)
 - [0027 — Zero-cost portfolio path](docs/adr/0027-zero-cost-portfolio-path.md)
 - [0028 — AWS zero-cost portfolio deployment](docs/adr/0028-aws-zero-cost-portfolio.md)
+- [0029 — Secure CI/CD with AWS OIDC](docs/adr/0029-secure-cicd-aws-oidc.md)

@@ -294,6 +294,13 @@ export interface Health {
   version: string;
 }
 
+export interface ReleaseInfo {
+  version: string;
+  gitCommit: string;
+  buildTime: string;
+  environment: string;
+}
+
 export interface ReadyStatus {
   status: string;
   database: string;

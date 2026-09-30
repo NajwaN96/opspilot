@@ -73,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/rollouts/payment-api/bad", s.deployBadPayment)
 	mux.HandleFunc("GET /api/v1/kubernetes/status", s.kubernetesStatus)
 	mux.HandleFunc("GET /api/v1/cloud/status", s.cloudStatus)
+	mux.HandleFunc("GET /api/v1/release", s.release)
 	mux.HandleFunc("GET /api/v1/kubernetes/namespaces", s.kubernetesNamespaces)
 	mux.HandleFunc("GET /api/v1/kubernetes/workloads", s.kubernetesWorkloads)
 	mux.HandleFunc("GET /api/v1/kubernetes/workloads/{namespace}/{name}", s.kubernetesWorkload)

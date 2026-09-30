@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-python3 -m unittest discover -s "$ROOT/infra/aws-zero-cost" -p 'test_guard.py'
-python3 -m unittest discover -s "$ROOT/infra/aws-zero-cost/function" -p 'test_*.py'
+(
+  cd "$ROOT/infra/aws-zero-cost"
+  python3 -m unittest test_guard test_delivery test_ci_policy test_release_meta
+)
+(
+  cd "$ROOT/infra/aws-zero-cost/function"
+  python3 -m unittest test_catalog
+)
 echo "zero-cost guard tests passed"

@@ -34,19 +34,38 @@ OPSPILOT_AWS_PORTFOLIO=1 NEXT_PUBLIC_OPSPILOT_RUNTIME=aws-portfolio-demo npm run
 rm -rf "$SITE"
 mkdir -p "$SITE" "$DIST"
 cp -a "$WEB/out/." "$SITE/"
+OPSPILOT_GIT_COMMIT="${OPSPILOT_GIT_COMMIT:-}" \
+OPSPILOT_BUILD_TIME="${OPSPILOT_BUILD_TIME:-}" \
+GITHUB_RUN_ID="${GITHUB_RUN_ID:-}" \
 python3 - << PY
+import hashlib
+import os
+import sys
 import zipfile
 from pathlib import Path
+
+sys.path.insert(0, "$HERE")
+import release_meta
+
 here = Path("$HERE")
 zip_path = Path("$ZIP")
 if zip_path.exists():
     zip_path.unlink()
+public = release_meta.public_labels(
+    os.environ.get("OPSPILOT_GIT_COMMIT", ""),
+    os.environ.get("OPSPILOT_BUILD_TIME", ""),
+)
 with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
     for name in ("handler.py", "catalog.py"):
         archive.write(here / "function" / name, name)
+    archive.writestr("release.json", release_meta.dumps(public))
     site = here / "function" / "site"
     for path in site.rglob("*"):
         if path.is_file():
             archive.write(path, Path("site") / path.relative_to(site))
-print(zip_path, zip_path.stat().st_size)
+digest = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+(zip_path.parent / "portfolio.zip.sha256").write_text(f"{digest}  portfolio.zip\n", encoding="utf-8")
+record = release_meta.artifact_record(public, digest, os.environ.get("GITHUB_RUN_ID", ""))
+(zip_path.parent / "release-metadata.json").write_text(release_meta.dumps(record), encoding="utf-8")
+print(zip_path.name, zip_path.stat().st_size, digest)
 PY

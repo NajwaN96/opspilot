@@ -1,0 +1,22 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "UpdateExistingPortfolioFunction",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:UpdateFunctionCode",
+        "lambda:GetFunctionUrlConfig"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:*:function:opspilot-portfolio"
+    },
+    {
+      "Sid": "ReadFreePlan",
+      "Effect": "Allow",
+      "Action": "freetier:GetAccountPlanState",
+      "Resource": "*"
+    }
+  ]
+}

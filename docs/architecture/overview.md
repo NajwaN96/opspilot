@@ -26,6 +26,40 @@ OpenTofu under infra/terraform
 
 The public site is not attached to the local cluster. EKS stays unapplied because the portfolio requirement is zero out-of-pocket cost. See [ADR 0028](../adr/0028-aws-zero-cost-portfolio.md).
 
+## Release path
+
+```
+Developer
+    |
+    v
+GitHub pull request
+    |
+    v
+CI quality gates
+    Go tests, frontend, security, secrets, dependencies
+    plan-only IaC validate, GitOps render, zero-cost policy
+    |
+    v
+merge to main
+    |
+    v
+GitHub OIDC token
+    |
+    v
+AWS STS temporary credentials
+    |
+    v
+role opspilot-github-deployer
+    |
+    v
+existing Lambda opspilot-portfolio
+    |
+    v
+smoke tests, or restore the previous zip
+```
+
+CI does not apply `infra/terraform`. Static AWS access keys are not used. The decision is [ADR 0029](../adr/0029-secure-cicd-aws-oidc.md).
+
 ## Today
 
 ```
