@@ -25,7 +25,7 @@ export function previewFiles(input: GoldenInput): PreviewFile[] {
   return [
     {
       path: "Dockerfile",
-      body: `FROM ${input.runtime === "go" ? "golang:1.27.1-alpine" : input.runtime === "node" ? "node:22-alpine" : "python:3.12-alpine"}\n# Build ${name}. Run as uid 65532. See templates/services/${input.runtime}/Dockerfile.\nUSER 65532:65532\nEXPOSE 8080\n`,
+      body: `FROM ${input.runtime === "go" ? "golang:1.27.4-alpine" : input.runtime === "node" ? "node:22-alpine" : "python:3.12-alpine"}\n# Build ${name}. Run as uid 65532. See templates/services/${input.runtime}/Dockerfile.\nUSER 65532:65532\nEXPOSE 8080\n`,
     },
     {
       path: source,
