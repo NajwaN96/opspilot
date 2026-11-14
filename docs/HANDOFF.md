@@ -6,7 +6,7 @@ Local lab header: **LOCAL — LIVE**. Public site banner: **AWS PUBLIC PORTFOLIO
 
 ## Start the local demo
 
-Requirements are in the README: Node.js 22, npm, Go 1.27.1, Docker, k3d, kubectl.
+Requirements are in the README: Node.js 22, npm, Go 1.27.4, Docker, k3d, kubectl.
 
 PostgreSQL:
 
